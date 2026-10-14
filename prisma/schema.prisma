@@ -1,0 +1,476 @@
+// ============================================================================
+// RMIS — Recruitment Management Information System (DOST-MIRDC)
+// Normalized Prisma schema implementing RMIS-FLOW-SPECIFICATION.md §5.
+// Storage is normalized (single SQLite file) — all entities, fields and
+// behaviors from the spec are preserved. JSON-typed data is stored as
+// TEXT (JSON.stringify) since SQLite + Prisma has no native json type here.
+// ============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ────────────────────────────────────────────────────────────── Users / Auth
+
+model User {
+  id         String    @id @default(cuid())
+  username   String    @unique
+  email      String    @unique
+  password   String // bcrypt hash
+  firstName  String?
+  middleName String?
+  lastName   String?
+  role       String    @default("APPLICANT") // ADMIN | EVALUATOR | APPLICANT
+  blocked    Boolean   @default(false) // deactivation flag
+  // confirmed defaults true so seed + admin-created accounts are pre-verified;
+  // register (Task 30-b) now creates APPLICANTS with confirmed:false — the
+  // emailed 6-digit OTP gates the first sign-in (login 403 until verified).
+  confirmed  Boolean   @default(true)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  applicant   Applicant?
+  jobPostings JobPosting[] @relation("JobAuthor")
+
+  contactRequestsHandled ContactRequest[]
+}
+
+// One-time email verification codes (Task 30-b): the plaintext 6-digit code
+// exists ONLY in the return value of issueOtp() and the outgoing email — the
+// row stores sha256(code:pepper) only. One active row per email+purpose
+// (issueOtp invalidates previous unconsumed ones); 10-min TTL; 5-attempt lock.
+model EmailOtp {
+  id         String    @id @default(cuid())
+  email      String
+  codeHash   String
+  purpose    String    @default("SIGNUP")
+  expiresAt  DateTime
+  attempts   Int       @default(0)
+  consumedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([email, purpose])
+}
+
+// ─────────────────────────────────────────────── Applicant profile (7 parts)
+
+model Applicant {
+  id        Int      @id @default(autoincrement())
+  userId    String?  @unique
+  user      User?    @relation(fields: [userId], references: [id])
+
+  // Identity
+  employeeNumber String?
+  firstName      String?
+  middleName     String?
+  lastName       String?
+  extensionName  String?
+  nickname       String?
+  // Contact
+  mobileNumber       String?
+  contactNumber      String?
+  contactNumberSec   String?
+  telephoneNumber    String?
+  emailAddress       String?
+  // Personal
+  birthDate    String? // TEXT date "YYYY-MM-DD"
+  birthPlace   String?
+  gender       String?
+  civilStatus  String?
+  citizenship  String?
+  height       String?
+  weight       String?
+  bloodType    String?
+  religion     String?
+  ethnicity    String?
+  isPwd        Boolean  @default(false)
+  // Present address
+  houseNumber String?
+  street      String?
+  subdivision String?
+  barangay    String?
+  city        String?
+  province    String?
+  country     String?
+  zipCode     String?
+  presentAddress String?
+  // Permanent address
+  permanentHouseNumber String?
+  permanentStreet      String?
+  permanentSubdivision String?
+  permanentBarangay    String?
+  permanentCity        String?
+  permanentProvince    String?
+  permanentZipCode     String?
+  // Government IDs
+  pagibig   String?
+  gsis      String?
+  philhealth String?
+  tin       String?
+  sss       String?
+  govtIssuedId       String?
+  govtIdIssuedNumber String?
+  govtIdIssuedPlace  String?
+  govtIdDateIssued   String?
+  govtIdValidUntil   String?
+  // Declarations
+  isGovernment   Boolean  @default(false)
+  pendingCases   String?
+  adminCase      Boolean  @default(false)
+  adminCaseDetails String?
+  crimeCharge      Boolean  @default(false)
+  crimeDate        String?
+  crimeCaseStatus  String?
+  characterReference String? // JSON array [{name,title,company,companyAddress,email,contact}]
+  specifyReferral  String?
+  remarks          String?
+  // Workflow
+  qualified          Boolean  @default(false)
+  isProfileComplete  Boolean  @default(false) // the apply-gate flag (spec §8.3)
+  submittedDate      DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  educations      Education[]
+  workExperiences WorkExperience[]
+  trainings       Training[]
+  eligibilities   Eligibility[]
+  awards          Award[]
+  documents       Document[]
+  applications    Application[]
+  notifications   Notification[]
+}
+
+model Education {
+  id          Int     @id @default(autoincrement())
+  applicantId Int
+  applicant   Applicant @relation(fields: [applicantId], references: [id], onDelete: Cascade)
+  educationLevel    String?
+  degree            String?
+  course            String?
+  specifyOthers     String?
+  schoolName        String?
+  ongoing           Boolean @default(false)
+  isHighestEducation Boolean @default(false)
+  yearFrom          String?
+  yearTo            String?
+  highestLevel      String?
+  unitsEarned       String?
+  yearGraduated     String?
+  awards            String?
+  hrRemarks         String?
+  ord               Float   @default(0)
+  createdAt DateTime @default(now())
+  @@index([applicantId])
+}
+
+model WorkExperience {
+  id          Int     @id @default(autoincrement())
+  applicantId Int
+  applicant   Applicant @relation(fields: [applicantId], references: [id], onDelete: Cascade)
+  positionTitle    String?
+  employerName     String?
+  employerAddress  String?
+  isPresentWork    Boolean @default(false)
+  isGovtService    Boolean @default(false)
+  dateFrom         DateTime?
+  dateTo           DateTime?
+  statusOfEmployment String?
+  monthlySalary    Float?
+  supervisorName     String?
+  supervisorPosition String?
+  office             String?
+  reasonForLeaving   String?
+  accomplishment     String?
+  actualDuties       String?
+  hrRemarks          String?
+  yearDecimal        Float?  // MQR denominator (spec §8.1)
+  ord                Float   @default(0)
+  createdAt DateTime @default(now())
+  @@index([applicantId])
+}
+
+model Training {
+  id          Int     @id @default(autoincrement())
+  applicantId Int
+  applicant   Applicant @relation(fields: [applicantId], references: [id], onDelete: Cascade)
+  title           String?
+  typeOfTraining  String?
+  specifyTraining String?
+  numberHours     Int?
+  hourDecimal     Float? // MQR: hourDecimal ?? numberHours
+  isPresentWork   Boolean @default(false)
+  isGovtService   Boolean @default(false)
+  dateFrom        DateTime?
+  dateTo          DateTime?
+  hrRemarks       String?
+  ord             Float   @default(0)
+  createdAt DateTime @default(now())
+  @@index([applicantId])
+}
+
+model Eligibility {
+  id          Int     @id @default(autoincrement())
+  applicantId Int
+  applicant   Applicant @relation(fields: [applicantId], references: [id], onDelete: Cascade)
+  title           String // resolved against the eligibility vocabulary (spec §5.3)
+  rating          String?
+  examDate        String?
+  examPlace       String?
+  licenseNumber   String?
+  licenseValidity String?
+  hrRemarks       String?
+  ord             Float   @default(0)
+  createdAt DateTime @default(now())
+  @@index([applicantId])
+}
+
+model Award {
+  id          Int     @id @default(autoincrement())
+  applicantId Int
+  applicant   Applicant @relation(fields: [applicantId], references: [id], onDelete: Cascade)
+  recognitionType String? // Award | Accomplishment
+  scope           String? // Individual/Group · Local/Foreign/International
+  details         String?
+  category        String?
+  provider        String? // awarding body
+  dateGranted     String? // TEXT date
+  points          Int?
+  hrRemarks       String?
+  ord             Float   @default(0)
+  createdAt DateTime @default(now())
+  @@index([applicantId])
+}
+
+// ────────────────────────────────────────────────── Positions / Job postings
+
+model Position {
+  id            Int     @id @default(autoincrement())
+  itemNumber    String?
+  positionTitle String
+  positionType  String?
+  division      String?
+  placeOfAssignment String?
+  salaryGrade   String?
+  salaryStep    String?
+  salaryAmount  Float?
+  // CSC MQR standard columns (spec §5.4)
+  cscEducation         String?
+  cscEligibility       String?
+  cscEligibilityGroup  String?
+  cscWorkExperience    String?
+  cscTraining          String?
+  license              String?
+  preferredQualification String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  jobPostings JobPosting[]
+  @@index([positionTitle])
+}
+
+model JobPosting {
+  id            Int     @id @default(autoincrement())
+  title         String
+  positionType  String?
+  // QA 2026-02: null for Plantilla postings (1:1 with an item number);
+  // COS postings always carry a count.
+  numberOfVacancy Int?
+  briefDescription       String?
+  briefDescriptionHtml   String?
+  dutiesResponsibilities String?
+  dutiesHtml             String?
+  compensationPackage    String?
+  compensationHtml       String?
+  otherQualifications    String?
+  otherQualificationsHtml String?
+  publishDate   DateTime?
+  deadlineDate  DateTime?
+  processingDate DateTime?
+  positionId    Int?
+  position      Position? @relation(fields: [positionId], references: [id])
+  authorId      String?
+  author        User?     @relation("JobAuthor", fields: [authorId], references: [id])
+  publishedAt   DateTime  @default(now())
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  applications  Application[]
+  @@index([publishedAt])
+}
+
+// ────────────────────────────────────────────────────────────── Applications
+
+model Application {
+  id          Int     @id @default(autoincrement())
+  applicantId Int
+  applicant   Applicant @relation(fields: [applicantId], references: [id], onDelete: Cascade)
+  jobId       Int
+  job         JobPosting @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  status      String  @default("Applied") // Applied | Under Review | Shortlisted | Rejected (spec §4)
+  reason      String?
+  dateApplied DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  // Frozen credential snapshots (spec §5.6, §8.8) — JSON strings
+  snapshotProfile      String?
+  snapshotEducations   String?
+  snapshotExperiences  String?
+  snapshotTrainings    String?
+  snapshotEligibilities String?
+  snapshotAwards       String?
+  // MOM 2026-10-13: the (applicantId, jobId) pair is NO LONGER unique — a
+  // previously rejected/withdrawn applicant may re-apply to the same posting
+  // (repost/republication). The active-duplicate gate lives in the apply
+  // route; this index keeps the per-applicant per-job lookups fast.
+  @@index([applicantId, jobId])
+  @@index([status])
+  @@index([dateApplied])
+}
+
+// ───────────────────────────────────── Notifications / logs / audit / docs
+
+model Notification {
+  id          Int      @id @default(autoincrement())
+  applicantId Int
+  applicant   Applicant @relation(fields: [applicantId], references: [id], onDelete: Cascade)
+  name        String
+  description String
+  read        Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  @@index([applicantId])
+}
+
+model EmailLog {
+  id          Int      @id @default(autoincrement())
+  to          String
+  subject     String
+  bodyText    String?
+  bodyHtml    String?
+  provider    String   @default("mock")
+  status      String   @default("mock") // sent | failed | mock | skipped
+  providerRef String?
+  error       String?
+  relatedType String?
+  relatedId   Int?
+  attachments String? // JSON [{name, bytes}]
+  createdAt   DateTime @default(now())
+  @@index([relatedType, relatedId])
+}
+
+model SmsLog {
+  id          Int      @id @default(autoincrement())
+  to          String
+  message     String
+  provider    String   @default("mock")
+  status      String   @default("mock") // sent | failed | mock | skipped
+  providerRef String?
+  error       String?
+  relatedType String?
+  relatedId   Int?
+  createdAt   DateTime @default(now())
+  @@index([relatedType, relatedId])
+}
+
+model AuditLog {
+  id          Int      @id @default(autoincrement())
+  timestamp   DateTime @default(now())
+  userId      String?
+  userLabel   String?
+  userRole    String? // ADMIN | EVALUATOR | APPLICANT | SYSTEM
+  action      String
+  entityType  String?
+  entityId    String?
+  description String?
+  ipAddress   String?
+  @@index([timestamp])
+  @@index([action])
+  @@index([entityType, entityId])
+}
+
+model Document {
+  id            String   @id @default(uuid())
+  applicantId   Int
+  applicant     Applicant @relation(fields: [applicantId], references: [id], onDelete: Cascade)
+  uploadedById  String?
+  fileName      String // stored name <uuid>.<ext>
+  originalName  String
+  mimeType      String
+  size          Int // bytes
+  filePath      String // "upload/<applicantId>/<uuid>.<ext>"
+  category      String   @default("SUPPORTING")
+  status        String   @default("UPLOADED") // UPLOADED | PROCESSING | EXTRACTED | PARTIALLY_EXTRACTED | FAILED
+  extractedJson String?
+  extractionError String?
+  extractedAt   DateTime?
+  qualityScore  Int?     // 0-100 extraction quality grade (pds-validate)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  @@index([applicantId, category])
+}
+
+// ─────────────────────────────────────────────────────────── Reference data
+
+model EligibilityRef {
+  id    Int    @id @default(autoincrement())
+  name  String @unique
+  index Int    @default(0)
+}
+
+// Staff-extensible dropdown vocabulary (no code change needed to add a
+// choice): one row per added option, keyed by the form field it belongs to
+// (positionType | division | cscEducation | cscEligibility — the Job form's
+// type-or-pick fields). `value` is what lands in the posting/position column;
+// `label`/`hint` are display-only. Canonical dedup (casefold + collapsed
+// whitespace) keeps "Permanent" and "permanent " from mounting twice.
+model DropdownOption {
+  id             Int      @id @default(autoincrement())
+  fieldKey       String
+  value          String
+  // Canonical comparison key (casefold + collapsed whitespace) — the dedup
+  // identity. Unique per field so "Seasonal" and "  seasonal " can never
+  // mount as two rows even under concurrent adds.
+  valueKey       String
+  label          String
+  hint           String?
+  createdById    String?
+  createdByLabel String?
+  createdAt      DateTime @default(now())
+
+  @@unique([fieldKey, valueKey])
+  @@index([fieldKey])
+}
+
+model Course {
+  id           Int     @id @default(autoincrement())
+  name         String  @unique
+  abbreviation String?
+  category     String?
+  level        String?
+}
+
+model PlaceOfAssignment {
+  id   Int    @id @default(autoincrement())
+  name String @unique
+}
+
+// ────────────────────────────────────────────────────── QA 2026-02 additions
+
+// Inquiries and requests submitted through the public Contact page — managed
+// from Settings → Contact Requests (admin + evaluator).
+model ContactRequest {
+  id         Int       @id @default(autoincrement())
+  name       String
+  email      String
+  subject    String
+  message    String
+  status     String    @default("OPEN") // OPEN | RESOLVED
+  handledById String?
+  handledBy  User?     @relation(fields: [handledById], references: [id])
+  createdAt  DateTime  @default(now())
+  resolvedAt DateTime?
+  @@index([status, createdAt])
+}

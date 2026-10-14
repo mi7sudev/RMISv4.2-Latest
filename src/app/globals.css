@@ -1,0 +1,1056 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* ============================================================================
+   RMIS × "JETON" — Electric Blue edition (upload/DESIGN-RMIS-FINAL.md).
+   Editorial fintech on a near-blank canvas: vast white space, ONE chromatic
+   voice, typography that does all the talking. Flat surfaces — no heavy
+   elevations, no decorative borders — separated by whitespace, generous
+   rounded geometry (16px cards/inputs, 12px buttons, 8px links, 9999px
+   pills, 84px nav), and the float-from-below inverted card shadow.
+
+   USER DIRECTIVE (rebrand): the Jeton spec's Signal Orange role is carried
+   by the LEGACY RMIS ELECTRIC BLUE #1591DC — "retain our blue". Every
+   orange-derived tint in the source spec maps to a blue-family equivalent;
+   the spec's category accents (Coral Red / Cobalt Blue / Emerald Green) and
+   decorative washes (Citrus / Mint) are kept verbatim, rationed to
+   category-coded cards and small moments — never page backgrounds.
+
+   PALETTE: Paper White #ffffff (canvas), Blue Ink Roast #0E1C26 (body +
+   display — the near-black ties copy to the blue family), Electric Blue
+   #1591DC (the sole chromatic voice · hover #0E7ABF), Cloud Card #ebf0f8
+   (blue Sand Wash), Sky Wash #E9F5FC (blue Linen Blush), Body Gray #666a72,
+   Ash #8d939e (disabled/placeholder). Category accents: Coral Red #fb2d54,
+   Cobalt Blue #477ee9, Emerald Green #34c771. Washes: Citrus #f5ffbb,
+   Mint #bcffbb. Status system (ok/warn/bad/info/neutral) stays functional.
+
+   TYPOGRAPHY: one typeface — Inter (the spec's first-listed Sequel Sans
+   substitute) — weights 400/450/500 ONLY (never 600+; hierarchy comes from
+   size and tight leading, not boldness). Display 72-106px at line-height
+   0.9-1.0 with +0.01em tracking; small text 12-14px with +0.03em.
+
+   RADII: cards/inputs 16px, buttons 12px, links 8px, nav 84px, pills
+   9999px. SHADOWS: exactly two voices — the inverted lift
+   rgba(0,0,0,0.05) 0 -4px 16px (cards float from below) and the blue-tinted
+   float rgba(21,145,220,0.10) 0 8px 24px (floating glass panels). No drop
+   shadows on text or buttons. Layout: 1200px page max-width, 80px section
+   gaps, 4px base unit, comfortable density.
+   ========================================================================== */
+
+:root {
+  /* Dialog palette (preserved names, values are the rebrand) */
+  --tangerine-tag: #1591dc; /* RMIS Electric Blue (name kept for call sites) */
+  --midnight-ink: #0e1c26; /* Blue Ink Roast — near-black tied to the blue family (Jeton "Ink Roast" role) */
+  --graphite: #4a4d57;
+  --deep-slate: #2a2b31;
+  --carbon: #1f2025; /* Charcoal */
+  --stone: #5d6067; /* 6.3:1 on white, 5.5:1 on Cloud Card (WCAG AA) */
+  --pebble: #666a72; /* 5.4:1 on white, 4.8:1 on Cloud Card (WCAG AA) */
+  --ash: #8d939e;
+  --fog: #f5f8fc; /* mist */
+  --snow: #ffffff;
+  --cloud: #ebf0f8; /* Cloud Card — named so surfaces (.dlg-card, bg-cloud) follow dark mode */
+  --body-gray: #747679; /* Spec Body Gray — named so text-body-gray follows dark mode */
+  --dusty-rose: #d97a63; /* Coral-leaning */
+  --divider: #d5dce8;
+
+  /* Jeton blue-edition surfaces — the spec's orange-derived tints, mapped to
+     the blue family. Sky Wash = "Linen Blush" (ultra-light accent surface);
+     brand-tint/glass are the rgba(brand,0.05)/(0.1) input & border washes. */
+  --wash: #e9f5fc; /* Sky Wash — ultra-light blue-tinted surface */
+  --brand-tint: rgba(21, 145, 220, 0.05); /* tinted input/feature-card wash */
+  --brand-glass: rgba(21, 145, 220, 0.1); /* brand glass border */
+
+  /* Light rail (Bevel white sidebar) */
+  --rail-bg-top: #ffffff;
+  --rail-bg-bottom: #fbfcfe;
+  --rail-border: #e8edf5;
+  --rail-text: #5d6067;
+  --rail-text-dim: #666a72;
+  --rail-active-bg: #ebf0f8;
+  --rail-hover-bg: #f2f5fa;
+
+  /* Functional status system (softened Bevel tints) */
+  --ok: #1f7a3d;
+  --ok-bg: #e8f5ea;
+  --warn: #8a5f00; /* 5.1:1 on warn-bg (WCAG AA) */
+  --warn-bg: #fbf3dd;
+  --bad: #a8432f; /* 5.3:1 on bad-bg (WCAG AA) */
+  --bad-bg: #fdeeea;
+  --info: #0f68a3; /* RMIS blue family, 5.1:1 on info-bg (WCAG AA) */
+  --info-bg: #e3f1fb;
+  --neutral: #5d6067;
+  --neutral-bg: #f1f3f7;
+
+  /* Data-viz series — lead series carries the brand blue */
+  --viz-1: #1591dc; /* RMIS Electric Blue */
+  --viz-2: #31ce01; /* Recovery Green */
+  --viz-3: #ffca00; /* Signal Gold */
+  --viz-4: #b9a6ff; /* Sleep Lilac */
+  --viz-5: #ffab94; /* Coral Signal */
+
+  /* shadcn token bridge */
+  --background: #ffffff;
+  --foreground: #222326;
+  --card: #ffffff;
+  --card-foreground: #222326;
+  --popover: #ffffff;
+  --popover-foreground: #222326;
+  --primary: #1591dc; /* RMIS Electric Blue — the legacy brand primary (CTA fill) */
+  --primary-hover: #0e7abf; /* CTA/filled-chip hover shade — the one darker brand step */
+  --primary-foreground: #ffffff; /* white ink on the blue fill (legacy RMIS) */
+  --secondary: #f5f8fc;
+  --secondary-foreground: #222326;
+  --muted: #f5f8fc;
+  --muted-foreground: #5d6067;
+  --accent: #ebf0f8; /* Cloud Card */
+  --accent-foreground: #222326;
+  --destructive: #c05446;
+  --destructive-foreground: #ffffff;
+  --border: #e6ebf3;
+  --input: #d7dfec;
+  --ring: #1591dc; /* RMIS Electric Blue focus */
+  --chart-1: #1591dc;
+  --chart-2: #31ce01;
+  --chart-3: #ffca00;
+  --chart-4: #b9a6ff;
+  --chart-5: #ffab94;
+  --sidebar: #ffffff;
+  --sidebar-foreground: #222326;
+  --sidebar-primary: #1591dc;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #ebf0f8;
+  --sidebar-accent-foreground: #222326;
+  --sidebar-border: #e8edf5;
+  --sidebar-ring: #1591dc;
+  --radius: 1rem;
+}
+
+/* ── Dark mode — "Bevel Night" (Task 35) ──────────────────────────────────
+   The same Bevel geometry on a deep cool-graphite canvas. ONLY TOKENS flip:
+   every utility and custom class that consumes the variables (bg-background,
+   bg-card, bg-fog, bg-cloud, text-ink, border-border, .dlg-card, .rail,
+   status pills, …) follows automatically — no component edits. The RMIS
+   Electric Blue primary stays the one brand constant, and metric/data-viz
+   accents keep their hues (they are small indicators, never surfaces).
+   Declared AFTER :root so, on <html class="dark">, these win the equal-
+   specificity cascade. layout.tsx applies the class pre-paint (no FOUC). */
+.dark {
+  color-scheme: dark;
+
+  /* Dialog palette (preserved names) — ink becomes moonlight, "snow/fog"
+     surfaces become raised/subtle dark cards. */
+  --tangerine-tag: #1591dc;
+  --midnight-ink: #e9ebf2;
+  --graphite: #c6cbd7;
+  --deep-slate: #d7dbe4;
+  --carbon: #101216;
+  --stone: #9aa1ae;
+  --pebble: #8f96a3;
+  --ash: #6d7480;
+  --fog: #191c23;
+  --snow: #262b35; /* raised card — visibly lighter than the cloud tile */
+  --cloud: #1f232c;
+  --body-gray: #a2a8b4;
+  --dusty-rose: #d97a63;
+  --divider: #2c313c;
+
+  /* Jeton surfaces — night equivalents */
+  --wash: #0f2536; /* deep blue wash */
+  --brand-tint: rgba(21, 145, 220, 0.08);
+  --brand-glass: rgba(21, 145, 220, 0.16);
+
+  /* Light rail → night rail */
+  --rail-bg-top: #1a1d24;
+  --rail-bg-bottom: #15181e;
+  --rail-border: #262b35;
+  --rail-text: #a6acb9;
+  --rail-text-dim: #8f96a3;
+  --rail-active-bg: #262c38;
+  --rail-hover-bg: #20242e;
+
+  /* Functional status system — dark-friendly tints (AA on their bgs) */
+  --ok: #58d473;
+  --ok-bg: #12271a;
+  --warn: #f5c04a;
+  --warn-bg: #2b230f;
+  --bad: #f08573;
+  --bad-bg: #33180f;
+  --info: #6db8ef;
+  --info-bg: #0f2536;
+  --neutral: #9aa1ae;
+  --neutral-bg: #232732;
+
+  /* shadcn token bridge */
+  --background: #121419;
+  --foreground: #e9ebf2;
+  --card: #1a1d24;
+  --popover: #262b35;
+  --popover-foreground: #e9ebf2;
+  --primary: #1591dc; /* RMIS Electric Blue — the one brand constant */
+  --primary-hover: #0e7abf;
+  --primary-foreground: #ffffff;
+  --secondary: #232732;
+  --secondary-foreground: #e9ebf2;
+  --muted: #232732;
+  --muted-foreground: #9aa1ae;
+  --accent: #232a38;
+  --accent-foreground: #e9ebf2;
+  --destructive: #e07b6a;
+  --destructive-foreground: #ffffff;
+  --border: #2a303c;
+  --input: #3a4150;
+  --ring: #1591dc;
+  --chart-1: #1591dc;
+  --chart-2: #31ce01;
+  --chart-3: #ffca00;
+  --chart-4: #b9a6ff;
+  --chart-5: #ffab94;
+  --sidebar: #1a1d24;
+  --sidebar-foreground: #e9ebf2;
+  --sidebar-primary: #1591dc;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #232a38;
+  --sidebar-accent-foreground: #e9ebf2;
+  --sidebar-border: #262b35;
+  --sidebar-ring: #1591dc;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  /* ONE typeface: Inter (Sequel Sans substitute) leads the stack everywhere —
+     system faces are fallbacks only, so the voice never splits per platform. */
+  --font-sans: var(--font-inter), -apple-system, BlinkMacSystemFont, "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-inter), -apple-system, BlinkMacSystemFont, "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+
+  /* ── Jeton type scale (spec-exact, upload/DESIGN-RMIS-FINAL.md §Tokens) ──
+     Weight 400/450/500 only; +0.01em display tracking, +0.03em small text.
+     Legacy token names kept for call sites; values are the Jeton steps. */
+  --text-caption: 12px;
+  --text-caption--line-height: 1.5;
+  --text-caption--letter-spacing: 0.36px;
+  --text-nav: 16px;
+  --text-nav--line-height: 1.4;
+  --text-nav--letter-spacing: 0px;
+  --text-brand-nav: 18px;
+  --text-brand-nav--line-height: 1.4;
+  --text-brand-nav--letter-spacing: 0.54px; /* +0.03em small-text tracking */
+  --text-body: 16px; /* Jeton body step (legacy name kept) */
+  --text-body--line-height: 1.45; /* enterprise legibility; spec editorial lead uses leading-tight utilities */
+  --text-body--letter-spacing: 0px;
+  --text-section-label: 23px; /* Jeton subheading */
+  --text-section-label--line-height: 1.2;
+  --text-section-label--letter-spacing: 0.23px;
+  --text-card-heading: 33px; /* Jeton heading-sm */
+  --text-card-heading--line-height: 1.2;
+  --text-card-heading--letter-spacing: 0.33px;
+  --text-display: 44px; /* Jeton heading */
+  --text-display--line-height: 1.2;
+  --text-display--letter-spacing: 0.44px;
+  --text-hero-display: 72px; /* Jeton heading-lg */
+  --text-hero-display--line-height: 1;
+  --text-hero-display--letter-spacing: 0.72px;
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+
+  /* Brand colors as Tailwind utilities (legacy names kept for call sites).
+     Bevel named surfaces/inks point at the :root/.dark variables so the
+     utilities (bg-fog, bg-cloud, text-ink, …) follow the theme — Task 35. */
+  --color-tangerine: #1591dc; /* RMIS Electric Blue (name kept for call sites) */
+  --color-ink: var(--midnight-ink);
+  --color-graphite: var(--graphite);
+  --color-slate-dark: var(--deep-slate);
+  --color-carbon: var(--carbon);
+  --color-stone: var(--stone);
+  --color-pebble: var(--pebble);
+  --color-ash: var(--ash);
+  --color-fog: var(--fog);
+  --color-snow: var(--snow);
+  --color-dusty-rose: var(--dusty-rose);
+  --color-divider: var(--divider);
+
+  /* Bevel named surfaces & accents as Tailwind utilities */
+  --color-paper: var(--snow);
+  --color-cloud: var(--cloud);
+  --color-charcoal: var(--carbon);
+  --color-body-gray: var(--body-gray); /* Spec Body Gray — 4.56:1 on Paper White (AA). Small text on Cloud surfaces uses stone. */
+  --color-metric-blue: #1591dc; /* token renamed by legacy value — one brand blue */
+  --color-recovery-green: #31ce01;
+  --color-signal-gold: #ffca00;
+  --color-sleep-lilac: #b9a6ff;
+  --color-coral-signal: #ffab94;
+
+  /* Jeton blue-edition utilities (spec names, blue-mapped) */
+  --color-signal: #1591dc; /* "Signal Orange" role → RMIS Electric Blue */
+  --color-wash: var(--wash); /* Sky Wash surface */
+  --color-brand-tint: var(--brand-tint); /* rgba(brand,0.05) input/feature wash */
+  --color-brand-glass: var(--brand-glass); /* rgba(brand,0.1) glass border */
+  /* Category-coded accents — kept verbatim from the spec, rationed to
+     feature-category cards and category-coded moments only. */
+  --color-coral-red: #fb2d54;
+  --color-cobalt: #477ee9;
+  --color-emerald-accent: #34c771;
+  --color-citrus-wash: #f5ffbb;
+  --color-mint-wash: #bcffbb;
+
+  /* Hero Sky — hero atmosphere tokens (legacy names; the composer class
+     .hero-sky now blends the Sky Wash into the white canvas) */
+  --color-hero-sky: #e9f5fc;
+  --color-hero-warm: #ffffff;
+
+  /* Status colors as Tailwind utilities */
+  --color-ok: var(--ok);
+  --color-ok-bg: var(--ok-bg);
+  --color-warn: var(--warn);
+  --color-warn-bg: var(--warn-bg);
+  --color-bad: var(--bad);
+  --color-bad-bg: var(--bad-bg);
+  --color-info: var(--info);
+  --color-info-bg: var(--info-bg);
+  --color-neutral-ui: var(--neutral);
+  --color-neutral-bg: var(--neutral-bg);
+
+  /* Data-viz series */
+  --color-viz-1: var(--viz-1);
+  --color-viz-2: var(--viz-2);
+  --color-viz-3: var(--viz-3);
+  --color-viz-4: var(--viz-4);
+  --color-viz-5: var(--viz-5);
+
+  /* Radii — Jeton geometry: cards/inputs 16, buttons 12, links 8, pills 9999,
+     nav 84, imagery/editorial 24. Element classes map: xs=links, sm=buttons
+     (+chips), md..2xl=cards/inputs/dialogs, 3xl=editorial imagery. */
+  --radius-xs: 8px;
+  --radius-sm: 12px;
+  --radius-md: 16px;
+  --radius-lg: 16px;
+  --radius-xl: 16px;
+  --radius-2xl: 16px;
+  --radius-3xl: 24px;
+  --radius-4xl: 24px;
+  --radius-nav: 84px;
+  --radius-dialog-card: 16px;
+  --radius-dialog-small: 16px;
+  --radius-dialog-badge: 9999px;
+  --radius-dialog-button: 12px;
+  --radius-dialog-overlay: 16px;
+  --radius-dialog-inner: 16px;
+
+  /* Elevation — exactly TWO voices (Jeton): the inverted card lift (float-
+     from-below) and the blue-tinted floating-glass shadow. e1-e4 remain as
+     quiet micro-elevation for transient layers (menus, tooltips, drag). */
+  --shadow-e1: 0 1px 2px rgba(14, 28, 38, 0.04);
+  --shadow-e2: 0 2px 8px rgba(14, 28, 38, 0.05);
+  --shadow-e3: 0 8px 24px -8px rgba(14, 28, 38, 0.1);
+  --shadow-e4: 0 16px 48px -16px rgba(14, 28, 38, 0.16);
+  /* THE content-card lift — spec --shadow-md (inverted, lifts from below) */
+  --shadow-lift: rgba(0, 0, 0, 0.05) 0px -4px 16px 0px;
+  /* Floating glass panels — spec --shadow-lg, blue-tinted */
+  --shadow-float-brand: rgba(21, 145, 220, 0.1) 0px 8px 24px 0px, rgba(21, 145, 220, 0.05) 0px 2px 8px 0px;
+  /* Floating imagery lift (community/carousel cards) — spec --shadow-md */
+  --shadow-image-lift: rgba(0, 0, 0, 0.25) 0px 0px 16px -8px;
+  /* Elevated floating cards (QR-style prompts) — spec --shadow-md-2 */
+  --shadow-float: rgba(0, 0, 0, 0.15) 0px 2px 16px 0px;
+  /* Spec white inset glows — top-light inside Charcoal surfaces */
+  --inset-shadow-subtle: rgb(255, 255, 255) 0px 1px 0px 0px inset, rgba(255, 255, 255, 0.25) 0px 0px 4px 0px inset;
+  --inset-shadow-subtle-2: rgba(255, 255, 255, 0.36) 0px 1px 0px 0px inset;
+  --inset-shadow-lg: rgb(255, 255, 255) 0px 0px 24px 0px inset;
+  --shadow-cta: 0 1px 2px rgba(31, 32, 37, 0.12);
+  --shadow-cta-hover: rgba(0, 0, 0, 0.15) 0px 2px 16px 0px;
+  --shadow-dialog-subtle: rgba(31, 32, 37, 0.12) 0px 2px 3px -2px;
+  --shadow-dialog-button: rgba(0, 0, 0, 0.04) 0px 1px 2px 0px, rgba(0, 0, 0, 0.02) 0px 2px 4px 0px;
+  --shadow-dialog-fade: rgba(245, 248, 252, 0.5) 0px -40px 40px 0px;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    background: var(--background);
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-inter), -apple-system, BlinkMacSystemFont, "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+    letter-spacing: 0; /* Jeton: no global tightening — tracking is positive at the extremes */
+    font-feature-settings: "blwf", "cv03", "cv04", "cv09";
+  }
+  /* Paper White canvas — no ambient mesh. Bevel keeps the shell monochrome;
+     atmosphere belongs to hero visuals (Hero Sky gradient), not the page. */
+  /* Enterprise a11y: visible keyboard focus everywhere (RMIS Electric Blue).
+     No border-radius override — a focused pill stays a capsule; the outline
+     hugs each element's own silhouette. */
+  :focus-visible {
+    outline: 2px solid #1591dc;
+    outline-offset: 2px;
+  }
+  .dlg-cta:focus-visible {
+    outline-color: #1591dc;
+  }
+}
+
+/* Jeton typography helpers — Blue Ink display, weight 500, +0.01em tracking.
+   Hierarchy comes from SIZE and tight leading, never boldness (no 600+). */
+.font-display {
+  font-family: var(--font-inter), -apple-system, BlinkMacSystemFont, "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+.text-display-hero {
+  font-family: var(--font-inter), -apple-system, BlinkMacSystemFont, "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+  font-weight: 500;
+  font-size: clamp(44px, 7vw, 106px); /* Jeton display step: 106px */
+  line-height: 0.95; /* tight editorial leading — non-negotiable */
+  letter-spacing: 0.01em;
+  color: var(--midnight-ink);
+}
+/* Short-viewport laptops (incl. browser zoom): step the hero headline down
+   to the 72px heading-lg step so the frontpage explorer keeps room for
+   the job board without the footer crowding the first screen. */
+@media (max-height: 860px) {
+  .text-display-hero {
+    font-size: clamp(40px, 5vw, 72px); /* Jeton heading-lg step: 72px */
+  }
+}
+/* ── Surfaces ─────────────────────────────────────────────────────────────── */
+
+/* Cloud Feature Card: pale Cloud Card surface, 16px radius, NO border,
+   NO shadow — the tinted surface itself is the elevation (Jeton tinted
+   surface role). */
+.dlg-card {
+  position: relative;
+  background: var(--cloud);
+  border-radius: 16px;
+}
+/* White variant — THE content card: white, 16px radius, and the spec's
+   inverted shadow that lifts the card from below rather than casting down. */
+.dlg-card-plain {
+  background: var(--snow);
+  border-radius: 16px;
+  box-shadow: var(--shadow-lift);
+}
+/* Night: an upward dark shadow is invisible on the graphite canvas —
+   swap the lift for the quiet night hairline. */
+.dark .dlg-card-plain {
+  box-shadow: 0 0 0 1px var(--border);
+}
+
+/* Hover-lift card utility (opt-in) — image-lift shadow only, never borders */
+.lift {
+  transition: transform 200ms ease, box-shadow 200ms ease;
+}
+.lift:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-float-brand);
+}
+
+/* Frosted glass — full-width sticky top bar over the canvas */
+.glass {
+  background: color-mix(in srgb, var(--snow) 86%, transparent);
+  backdrop-filter: blur(16px) saturate(1.3);
+  -webkit-backdrop-filter: blur(16px) saturate(1.3);
+}
+
+/* Hero Sky — Jeton edition: a whisper of the brand wash fading into the
+   white canvas (the ultra-light accent-tinted surface role). Night flips to
+   the deep blue wash over graphite. */
+.hero-sky {
+  background: linear-gradient(180deg, #e9f5fc 0%, #ffffff 82%);
+}
+.dark .hero-sky {
+  background: linear-gradient(180deg, #0f2536 0%, var(--background) 82%);
+}
+
+/* Light rail — Bevel white navigation surface */
+.rail {
+  background: linear-gradient(180deg, var(--rail-bg-top) 0%, var(--rail-bg-bottom) 100%);
+  border-right: 1px solid var(--rail-border);
+}
+
+/* ── Buttons ──────────────────────────────────────────────────────────────── */
+
+/* Primary pill button (Jeton "Primary Pill Button", blue edition): #1591DC
+   fill, white ink, 12px radius, 500 weight, +0.03em small-text tracking.
+   Hover darkens to #0E7ABF. NO drop shadow — elevation never sits on
+   buttons (spec Don't list). */
+.dlg-cta {
+  position: relative;
+  background: #1591dc;
+  color: #ffffff;
+  border-radius: 12px;
+  font-weight: 500;
+  letter-spacing: 0.03em;
+  transition: background 160ms ease, transform 160ms ease;
+}
+.dlg-cta:hover {
+  background: #0e7abf;
+  transform: translateY(-1px);
+}
+.dlg-cta:active {
+  transform: translateY(0.5px);
+  background: #1591dc;
+}
+.dlg-ghost {
+  background: var(--snow);
+  color: var(--midnight-ink);
+  border-radius: 12px;
+  font-weight: 500;
+  letter-spacing: 0.03em;
+  border: 1px solid var(--divider);
+  transition: background 160ms ease, border-color 160ms ease;
+}
+.dlg-ghost:hover {
+  background: var(--fog);
+  border-color: #c9d3e2;
+}
+/* Dashed ghost — the "Add additional entry" affordance at the foot of the
+   profile credential sections (02 Education … 06 Awards). Same snow fill /
+   ink / radius as .dlg-ghost, but a DASHED rule: an additive slot rather
+   than a control (unlayered token, not a utility override — .dlg-ghost's
+   border shorthand would beat a layered border-dashed utility). */
+.dlg-ghost-dashed {
+  background: var(--snow);
+  color: var(--midnight-ink);
+  border-radius: 12px;
+  font-weight: 500;
+  letter-spacing: 0.03em;
+  border: 1px dashed var(--divider);
+  transition: background 160ms ease, border-color 160ms ease;
+}
+.dlg-ghost-dashed:hover {
+  background: var(--fog);
+  border-color: #c9d3e2;
+}
+/* Pills/badges/tags: true capsules */
+.dlg-pill {
+  border-radius: 9999px;
+}
+.dlg-input {
+  border-radius: 16px; /* Jeton inputs step */
+  background: var(--snow);
+  border: 1px solid var(--input);
+  transition: border-color 140ms ease, box-shadow 140ms ease;
+}
+.dlg-input::placeholder {
+  color: var(--pebble);
+}
+.dlg-input:focus {
+  border-color: #1591dc;
+  box-shadow: 0 0 0 3px rgba(21, 145, 220, 0.12); /* quiet brand focus, no heavy border */
+}
+/* ── Tinted icon chips (flat pale tints — Bevel metric accents) ───────────── */
+
+.chip {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  border-radius: 16px; /* Jeton utility radius */
+}
+/* amber and gold are the SAME chip (gold is reached dynamically via
+   `chip-${tone}` composition, e.g. the profile-completion banner) — one
+   shared rule so the two names can never drift apart again. */
+.chip-amber,
+.chip-gold {
+  background: #fff4c2;
+  color: #7a6400;
+}
+.chip-blue {
+  /* Pale blue icon chip — the quiet "informational" chip (cloud-tinted tile
+     with the RMIS blue icon). Complements chip-ink (solid brand fill) without
+     spending the blue fill on a passive tile. */
+  background: var(--info-bg);
+  color: var(--info);
+}
+.chip-emerald {
+  background: #e4f5df;
+  color: #1f7a02;
+}
+.chip-rose {
+  background: #ffe8e0;
+  color: #b34a32;
+}
+.chip-slate {
+  background: #e6ebf3;
+  color: #3f4553;
+}
+.chip-ink {
+  background: #1591dc;
+  color: #ffffff;
+}
+.chip-plum {
+  background: #eeebff;
+  color: #5b4bc4;
+}
+
+/* Monogram avatar — RMIS Electric Blue identity mark with white ink.
+   The ramp dips to the legacy hover #0E7ABF so small white initials keep
+   readable contrast on the darker end. */
+.monogram {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  border-radius: 9999px;
+  background: linear-gradient(145deg, #22a0e4 0%, #1591dc 55%, #0e7abf 100%);
+  color: #ffffff;
+  font-weight: 500;
+  letter-spacing: 0.03em;
+}
+.monogram-warm {
+  background: linear-gradient(145deg, #0e7abf 0%, #0a5e90 100%);
+  color: #ffffff;
+}
+
+/* ── Enterprise polish additions ─────────────────────────────────────────── */
+
+/* Institutional micro-label — the Bevel eyebrow: stat ledgers, rail group
+   labels, card eyebrows. 11px caps, stone, one letterspacing across the app
+   so micro-typography never drifts between hand-rolled call sites. */
+.eyebrow {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--stone);
+}
+
+/* Numerals: every value, date, currency, table metric */
+.num {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+}
+
+/* Focus ring utility for custom interactive elements. NO border-radius
+   here: a focused element must keep its own silhouette — the radius used
+   to snap capsules (9999px) and 12px buttons to 8px rectangles while
+   focused. The outline follows the element's real radius instead. */
+.focus-ring:focus-visible {
+  outline: 2px solid #1591dc;
+  outline-offset: 2px;
+}
+
+/* Skeleton shimmer. Lives in @layer components so call-site radius
+   utilities (rounded-full avatars, rounded-2xl kanban cards, the Skeleton
+   primitive's rounded-sm) win over the 12px default — unlayered, the
+   default silently overrode them and every avatar skeleton rendered as a
+   12px squircle. */
+@layer components {
+  .skel {
+    position: relative;
+    overflow: hidden;
+    background: #edf1f7;
+    border-radius: 12px;
+  }
+}
+.skel::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.65), transparent);
+  animation: skel-sweep 1.4s ease-in-out infinite;
+}
+@keyframes skel-sweep {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* Status pill variants (icon + tinted bg) — true Bevel capsules.
+   Accessibility: state never rides on hue alone — every pill carries a
+   shape-coded stroke glyph drawn as a clean 24px Lucide-geometry SVG
+   (ok=check · warn=clock · bad=x · info=send · neutral=minus) masked to
+   currentColor. No enclosing disc — just the professional stroke icon. */
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 9999px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+}
+.status-pill::before {
+  content: "";
+  width: 12px;
+  height: 12px;
+  flex: none;
+  background: currentColor;
+  -webkit-mask: var(--pill-icon) center / contain no-repeat;
+  mask: var(--pill-icon) center / contain no-repeat;
+}
+.status-pill.status-ok {
+  --pill-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='m5 12.6 4.5 4.5L19 7.5' fill='none' stroke='black' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background: var(--ok-bg);
+  color: var(--ok);
+}
+.status-pill.status-warn {
+  --pill-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='9.2' fill='none' stroke='black' stroke-width='2.4'/%3E%3Cpath d='M12 7.4V12l3.4 2' fill='none' stroke='black' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background: var(--warn-bg);
+  color: var(--warn);
+}
+.status-pill.status-bad {
+  --pill-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M6.6 6.6l10.8 10.8M17.4 6.6 6.6 17.4' fill='none' stroke='black' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E");
+  background: var(--bad-bg);
+  color: var(--bad);
+}
+.status-pill.status-info {
+  --pill-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='m22 2-7 20-4-9-9-4Z' fill='none' stroke='black' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M22 2 11 13' fill='none' stroke='black' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background: var(--info-bg);
+  color: var(--info);
+}
+.status-pill.status-neutral {
+  --pill-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M5.5 12h13' fill='none' stroke='black' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E");
+  background: var(--neutral-bg);
+  color: var(--neutral);
+}
+
+/* Icon status chips — tinted disc + clean Lucide-geometry stroke glyph.
+   Same icon language as the status pills (check/clock/x/send/minus) so
+   every status marker across the system agrees on shape AND hue. Tinted
+   bg + colored icon (no solid discs) — QA 2026-02: proper professional
+   icon treatment, no bare dots, no muddy disc-in-disc glyphs. */
+.status-dot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 100px;
+  flex: none;
+  background: var(--neutral-bg);
+  color: var(--neutral);
+}
+.status-dot svg {
+  width: 62%;
+  height: 62%;
+}
+.status-dot.dot-ok { background: var(--ok-bg); color: var(--ok); }
+.status-dot.dot-warn { background: var(--warn-bg); color: var(--warn); }
+.status-dot.dot-bad { background: var(--bad-bg); color: var(--bad); }
+.status-dot.dot-info { background: var(--info-bg); color: var(--info); }
+.status-dot.dot-neutral { background: var(--neutral-bg); color: var(--neutral); }
+
+/* ----------------------------------------------------------------------------
+   BEUI AnimatedBadge — syncing-state loop, CSS-compositor owned.
+   The JS motion loop committed its single-turn spin to the final frame
+   (spinner froze at rotate(360deg) ≡ 0° with zero running WAAPI tracks), so
+   the repeating motion now lives in CSS: the loading glyph turns one
+   revolution per second (Tailwind `animate-spin` on the icon wrapper) and the
+   tint overlay breathes on a 1.6s ease-in-out loop. Compositor-driven loops
+   are engine-guaranteed to repeat — they cannot commit-and-stop.
+   -------------------------------------------------------------------------- */
+@keyframes badge-pulse {
+  0%, 100% { transform: scale(0.94); opacity: 0.08; }
+  50% { transform: scale(1.08); opacity: 0.16; }
+}
+.badge-pulse {
+  animation: badge-pulse 1.6s ease-in-out infinite;
+  opacity: 0.1;
+}
+
+/* Long-list scrollbars (subtle) */
+.scroll-thin {
+  scrollbar-width: thin;
+  scrollbar-color: #d3dcea transparent;
+}
+.scroll-thin::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.scroll-thin::-webkit-scrollbar-thumb {
+  background: #d3dcea;
+  border-radius: 100px;
+}
+.scroll-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+/* ============================================================================
+   Mobile view: overlay-style scrolling (space-free scrollbars).
+   Real phones draw transient overlay scrollbars that never reserve layout
+   space; desktop engines still render classic scrollbars that eat ~15px on
+   the right of the page and squeeze every form/modal opened at a mobile
+   viewport. Below the sm breakpoint we hide scrollbars entirely — scrolling
+   itself is untouched (touch, wheel, trackpad) — so forms use their full
+   width, matching native mobile behavior.
+   ========================================================================= */
+@media (max-width: 639.98px) {
+  *,
+  *::before,
+  *::after {
+    scrollbar-width: none !important;
+    -ms-overflow-style: none !important;
+  }
+  *::-webkit-scrollbar {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+  }
+  /* Radix scroll-lock gap compensation is pointless once no classic
+     scrollbar exists — never pad the page while a dialog is open. */
+  html body[data-scroll-locked] {
+    margin-right: 0 !important;
+    padding-right: 0 !important;
+  }
+}
+
+/* Rich-text content rendering (job descriptions etc.) */
+.rich-text p {
+  margin: 0 0 0.75em;
+  line-height: 1.6;
+}
+.rich-text ul,
+.rich-text ol {
+  margin: 0 0 0.75em 1.25em;
+  line-height: 1.6;
+}
+.rich-text ul {
+  list-style: disc;
+}
+.rich-text ol {
+  list-style: decimal;
+}
+.rich-text strong {
+  color: var(--midnight-ink);
+  font-weight: 500;
+}
+.rich-text a {
+  color: var(--midnight-ink);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* Hairline table polish */
+.table-card {
+  /* Establish the containing block for absolutely-positioned descendants
+     (e.g. sr-only header labels). Without it those spans anchor to the
+     initial containing block, escape the card's overflow clip, and widen
+     the root scroller on mobile (R-03: zero horizontal scroll). */
+  position: relative;
+}
+.table-card thead th {
+  border-bottom: 1px solid var(--border);
+  /* Guarantee the institutional micro-label anatomy on every hairline table,
+     even where a call site's utility classes drift: 11px caps, stone. */
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--stone);
+}
+
+/* ── Dark mode sweeps (Task 35) ──────────────────────────────────────────────
+   Unlayered (beats Tailwind's layered utilities): dark-theme patches for the
+   handful of call sites that pin literal light values instead of tokens. */
+
+/* Tinted icon chips — same hues, dark-friendly tints (chip-blue/chip-ink
+   already ride the status/brand tokens). */
+.dark .chip-amber,
+.dark .chip-gold {
+  background: #2b230f;
+  color: #f5c04a;
+}
+.dark .chip-emerald {
+  background: #12271a;
+  color: #58d473;
+}
+.dark .chip-rose {
+  background: #33180f;
+  color: #f08573;
+}
+.dark .chip-slate {
+  background: #232732;
+  color: #c6cbd7;
+}
+.dark .chip-plum {
+  background: #241f38;
+  color: #b9a6ff;
+}
+
+/* Skeleton shimmer — night surface + soft moonlight sweep */
+.dark .skel {
+  background: #1e2129;
+}
+.dark .skel::after {
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.07), transparent);
+}
+
+/* Rich text ink */
+.dark .rich-text strong,
+.dark .rich-text a {
+  color: var(--midnight-ink);
+}
+
+/* Hardcoded-light utility sweep — the few components that pin literal white
+   fills / pale hex borders instead of tokens follow the night surfaces. */
+.dark .bg-white {
+  background-color: var(--snow);
+}
+.dark .bg-white\/45 {
+  background-color: color-mix(in srgb, var(--snow) 45%, transparent);
+}
+.dark .bg-white\/60 {
+  background-color: color-mix(in srgb, var(--snow) 60%, transparent);
+}
+.dark .bg-white\/80 {
+  background-color: color-mix(in srgb, var(--snow) 80%, transparent);
+}
+.dark .border-\[\#dfe6f0\] {
+  border-color: var(--border);
+}
+.dark .hover\:bg-\[\#e1e8f3\]:hover {
+  background-color: color-mix(in srgb, var(--accent) 70%, var(--snow) 30%);
+}
+
+/* ============================================================================
+   UploadCN (shadcn registry @uploadcn/folder-upload) — cn-upload-* semantic
+   classes, "nova" style (the uploadcn docs default). Required by the official
+   src/components/ui/upload.tsx + src/components/folder-upload.tsx blocks.
+   Source: uploadcn registry styles (style-nova.css), unwrapped for this file.
+   ============================================================================ */
+@layer components {
+  .cn-upload-dropzone {
+    @apply rounded-xl;
+  }
+
+  .cn-upload-dropzone-size-sm {
+    @apply gap-2.5 p-4;
+  }
+
+  .cn-upload-dropzone-size-default {
+    @apply gap-3 px-6 py-8;
+  }
+
+  .cn-upload-dropzone-size-lg {
+    @apply gap-4 px-8 py-12;
+  }
+
+  .cn-upload-dropzone-media-icon {
+    @apply bg-muted text-foreground flex size-8 shrink-0 items-center justify-center rounded-lg [&_svg:not([class*='size-'])]:size-4;
+  }
+
+  .cn-upload-dropzone-title {
+    @apply text-sm font-medium tracking-tight;
+  }
+
+  .cn-upload-dropzone-description {
+    @apply text-sm/relaxed;
+  }
+
+  .cn-upload-item {
+    @apply rounded-lg text-sm;
+  }
+
+  .cn-upload-item-size-default {
+    @apply gap-2.5 px-3 py-2.5;
+  }
+
+  .cn-upload-item-size-sm {
+    @apply gap-2.5 px-3 py-2.5;
+  }
+
+  .cn-upload-item-size-xs {
+    @apply gap-2 px-2.5 py-2;
+  }
+
+  .cn-upload-item-media {
+    @apply size-10 rounded-sm group-data-[size=sm]/upload-item:size-8 group-data-[size=xs]/upload-item:size-6;
+  }
+
+  .cn-upload-item-title {
+    @apply text-sm leading-snug font-medium;
+  }
+
+  .cn-upload-item-description {
+    @apply text-sm leading-normal;
+  }
+
+  .cn-upload-progress {
+    @apply h-1 rounded-full;
+  }
+
+  .cn-upload-modal {
+    @apply ring-foreground/10 rounded-xl text-sm ring-1;
+  }
+
+  .cn-upload-modal-body {
+    @apply gap-4 p-4;
+  }
+
+  .cn-upload-modal-title {
+    @apply text-base leading-none font-medium;
+  }
+
+  .cn-upload-modal-description {
+    @apply text-muted-foreground *:[a]:hover:text-foreground text-sm *:[a]:underline *:[a]:underline-offset-3;
+  }
+
+  .cn-upload-popover {
+    @apply ring-foreground/10 rounded-lg p-2.5 text-sm shadow-md ring-1;
+  }
+
+  .cn-upload-tabs-list {
+    @apply rounded-lg p-[3px] h-8;
+  }
+
+  .cn-upload-tabs-trigger {
+    @apply rounded-md text-sm font-medium;
+  }
+
+  .cn-upload-table-head {
+    @apply h-10 px-2;
+  }
+
+  .cn-upload-table-cell {
+    @apply p-2;
+  }
+
+  .cn-upload-card {
+    @apply ring-foreground/10 bg-card text-card-foreground gap-(--card-spacing) rounded-xl text-sm ring-1 [--card-spacing:--spacing(4)] p-(--card-spacing);
+  }
+
+  .cn-upload-card-title {
+    @apply text-base leading-snug font-medium;
+  }
+
+  .cn-upload-card-description {
+    @apply text-muted-foreground text-sm;
+  }
+
+  .cn-upload-chip {
+    @apply rounded-4xl;
+  }
+}

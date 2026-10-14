@@ -1,0 +1,29 @@
+# ============================================================================
+# RMIS 2.0 — PUBLIC door (applicants + staff-on-LAN convenience)
+# careers.mirdc.gov.ph :443 (automatic TLS) → RMIS on 127.0.0.1:3000
+#
+# CONTRACT: header_up X-Forwarded-For {remote_host} OVERWRITES the header with
+# the socket IP. Never append — the app classifies the staff tier by the LAST
+# XFF entry, so an appending proxy would let clients spoof intranet membership
+# with a hand-crafted X-Forwarded-For chain. See DEPLOYMENT.md §4.
+# ============================================================================
+
+careers.mirdc.gov.ph {
+	# Caddy obtains/renews the certificate automatically (Let's Encrypt).
+	# Set the ACME email here or globally via the `email` directive:
+	# email lets-email@mirdc.gov.ph
+
+	reverse_proxy 127.0.0.1:3000 {
+		header_up Host {host}
+		header_up X-Forwarded-For {remote_host}
+		header_up X-Real-IP {remote_host}
+		header_up X-Forwarded-Proto {scheme}
+	}
+
+	# Applicant document uploads (PDS, certificates — up to 10 MB files)
+	request_body {
+		max_size 12MB
+	}
+
+	encode gzip
+}

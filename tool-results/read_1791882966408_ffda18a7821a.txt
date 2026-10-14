@@ -1,0 +1,895 @@
+     1→"use client";
+     2→
+     3→// ============================================================================
+     4→// RMIS — Profile builder · Section 01 Personal Information (spec §7.4).
+     5→// 4 disclosure groups with "X of N completed" micro-labels: Identity,
+     6→// Address, Legal Disclosures (conditional detail fields), Character
+     7→// References (1–5 rows; empty-name rows filtered at save).
+     8→// Task 40 — READ-ONLY PREVIEW BY DEFAULT (user request): the section opens
+     9→// as a quiet preview of the SAVED record — plain label/value rows inside the
+    10→// same four disclosure groups (never disabled inputs). Editing is an
+    11→// explicit session:
+    12→//   • "Edit Profile" swaps the preview for the form and seeds the draft
+    13→//     from the freshest server profile;
+    14→//   • "Save Changes" validates through the Task 32 auth timing, persists,
+    15→//     toasts, reloads the parent profile and returns to the preview (with a
+    16→//     short "Saved ✓" flash in the header);
+    17→//   • "Cancel" returns to the preview — when the draft is dirty it asks
+    18→//     first, because in this model autosave is retired: with a Cancel
+    19→//     affordance, silent persistence would make "discard" a lie. The view
+    20→//     layer (profile-view) additionally guards section navigation while
+    21→//     unsaved edits exist via onUnsavedChange.
+    22→// A brand-new record (no first name + last name + email yet) boots straight
+    23→// into edit mode — there is nothing to preview yet — so first-time
+    24→// applicants still land directly on the form.
+    25→// BEUI field pass (Task 32/33, unchanged): text fields render the official
+    26→// capsule Input (src/components/motion/input), the case-details textarea the
+    27→// glue Textarea, selects keep the official BEUI Select on the shared
+    28→// beui-form tokens; the Save Changes button runs the official StatefulButton
+    29→// loading lifecycle.
+    30→// ============================================================================
+    31→
+    32→import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+    33→import { toast } from "@/lib/toast";
+    34→import { Mail, MapPin, Pencil, Phone, Plus, Scale, User, UserRound, Users } from "lucide-react";
+    35→import { apiFetch } from "@/lib/client";
+    36→import { CIVIL_STATUS_OPTIONS } from "@/lib/constants";
+    37→import {
+    38→  AlertDialog,
+    39→  AlertDialogAction,
+    40→  AlertDialogCancel,
+    41→  AlertDialogContent,
+    42→  AlertDialogDescription,
+    43→  AlertDialogFooter,
+    44→  AlertDialogHeader,
+    45→  AlertDialogTitle,
+    46→} from "@/components/ui/alert-dialog";
+    47→import { SectionCard } from "@/components/ui/shell";
+    48→import { cancelBtn, ghostBadBtn } from "@/components/ui/buttons";
+    49→import { useAuthErrors } from "@/components/forms/field-errors";
+    50→import { StatefulButton } from "@/components/motion/button";
+    51→import {
+    52→  Collapsible,
+    53→  CollapsibleContent,
+    54→  CollapsibleIndicator,
+    55→  CollapsibleTrigger,
+    56→} from "@/components/motion/collapsible";
+    57→import { Input } from "@/components/motion/input";
+    58→import { Label } from "@/components/ui/label";
+    59→import { Textarea } from "@/components/forms/textarea";
+    60→import { cn } from "@/lib/utils";
+    61→import YesNoField from "./yes-no-field";
+    62→import { SaveHint, useSavedFlash } from "./save-hint";
+    63→import {
+    64→  BEUI_FIELD_FILL,
+    65→  BEUI_FIELD_LABEL,
+    66→  BEUI_TRIGGER_BASE,
+    67→} from "./beui-form";
+    68→import {
+    69→  Select,
+    70→  SelectContent,
+    71→  SelectItem,
+    72→  SelectTrigger,
+    73→  SelectValue,
+    74→} from "@/components/motion/select";
+    75→import type { ApplicantProfile, CharacterReference } from "./section-types";
+    76→
+    77→// ── Draft model ─────────────────────────────────────────────────────────────
+    78→
+    79→type PersonalForm = {
+    80→  firstName: string;
+    81→  middleName: string;
+    82→  lastName: string;
+    83→  extensionName: string;
+    84→  emailAddress: string;
+    85→  mobileNumber: string;
+    86→  contactNumber: string;
+    87→  birthDate: string;
+    88→  birthPlace: string;
+    89→  gender: string;
+    90→  civilStatus: string;
+    91→  citizenship: string;
+    92→  ethnicity: string;
+    93→  isPwd: boolean;
+    94→  presentAddress: string;
+    95→  houseNumber: string;
+    96→  street: string;
+    97→  subdivision: string;
+    98→  barangay: string;
+    99→  city: string;
+   100→  province: string;
+   101→  country: string;
+   102→  zipCode: string;
+   103→  isGovernment: boolean;
+   104→  adminCase: boolean;
+   105→  adminCaseDetails: string;
+   106→  crimeCharge: boolean;
+   107→  crimeDate: string;
+   108→  crimeCaseStatus: string;
+   109→};
+   110→
+   111→const EMPTY_FORM: PersonalForm = {
+   112→  firstName: "", middleName: "", lastName: "", extensionName: "",
+   113→  emailAddress: "", mobileNumber: "", contactNumber: "",
+   114→  birthDate: "", birthPlace: "", gender: "", civilStatus: "", citizenship: "", ethnicity: "",
+   115→  isPwd: false,
+   116→  presentAddress: "", houseNumber: "", street: "", subdivision: "", barangay: "",
+   117→  city: "", province: "", country: "", zipCode: "",
+   118→  isGovernment: false, adminCase: false, adminCaseDetails: "",
+   119→  crimeCharge: false, crimeDate: "", crimeCaseStatus: "",
+   120→};
+   121→
+   122→const EMPTY_REF: CharacterReference = { name: "", title: "", company: "", companyAddress: "", email: "", contact: "" };
+   123→
+   124→const IDENTITY_FIELDS: (keyof PersonalForm)[] = [
+   125→  "firstName", "middleName", "lastName", "extensionName", "emailAddress", "mobileNumber",
+   126→  "contactNumber", "birthDate", "birthPlace", "gender", "civilStatus", "citizenship", "ethnicity",
+   127→];
+   128→const ADDRESS_FIELDS: (keyof PersonalForm)[] = [
+   129→  "presentAddress", "houseNumber", "street", "subdivision", "barangay", "city", "province", "country", "zipCode",
+   130→];
+   131→
+   132→function seedForm(p: ApplicantProfile | null): PersonalForm {
+   133→  if (!p) return { ...EMPTY_FORM };
+   134→  return {
+   135→    firstName: p.firstName ?? "",
+   136→    middleName: p.middleName ?? "",
+   137→    lastName: p.lastName ?? "",
+   138→    extensionName: p.extensionName ?? "",
+   139→    emailAddress: p.emailAddress ?? "",
+   140→    mobileNumber: p.mobileNumber ?? "",
+   141→    contactNumber: p.contactNumber ?? "",
+   142→    birthDate: p.birthDate ?? "",
+   143→    birthPlace: p.birthPlace ?? "",
+   144→    gender: p.gender ?? "",
+   145→    civilStatus: p.civilStatus ?? "",
+   146→    citizenship: p.citizenship ?? "",
+   147→    ethnicity: p.ethnicity ?? "",
+   148→    isPwd: p.isPwd === true,
+   149→    presentAddress: p.presentAddress ?? "",
+   150→    houseNumber: p.houseNumber ?? "",
+   151→    street: p.street ?? "",
+   152→    subdivision: p.subdivision ?? "",
+   153→    barangay: p.barangay ?? "",
+   154→    city: p.city ?? "",
+   155→    province: p.province ?? "",
+   156→    country: p.country ?? "",
+   157→    zipCode: p.zipCode ?? "",
+   158→    isGovernment: p.isGovernment === true,
+   159→    adminCase: p.adminCase === true,
+   160→    adminCaseDetails: p.adminCaseDetails ?? "",
+   161→    crimeCharge: p.crimeCharge === true,
+   162→    crimeDate: p.crimeDate ?? "",
+   163→    crimeCaseStatus: p.crimeCaseStatus ?? "",
+   164→  };
+   165→}
+   166→
+   167→function filledCount(form: PersonalForm, keys: (keyof PersonalForm)[]): number {
+   168→  return keys.filter((k) => typeof form[k] === "string" && (form[k] as string).trim() !== "").length;
+   169→}
+   170→
+   171→// ── Preview primitives (Task 40) ────────────────────────────────────────────
+   172→
+   173→/** ISO date (YYYY-MM-DD, or a full ISO datetime) → "May 12, 1990".
+   174→ *  Unparseable input falls back to the raw string. */
+   175→function formatDate(v: string | null | undefined): string {
+   176→  const raw = (v ?? "").trim();
+   177→  if (raw === "") return "";
+   178→  const iso = raw.length >= 10 ? raw.slice(0, 10) : raw;
+   179→  const d = new Date(`${iso}T00:00:00`);
+   180→  if (Number.isNaN(d.getTime())) return raw;
+   181→  return d.toLocaleDateString("en-PH", { year: "numeric", month: "long", day: "numeric" });
+   182→}
+   183→
+   184→function PreviewRow({
+   185→  label, value, full,
+   186→}: {
+   187→  label: string; value: string | null | undefined; full?: boolean;
+   188→}) {
+   189→  const text = (value ?? "").trim();
+   190→  return (
+   191→    <div className={cn("min-w-0", full && "sm:col-span-2")}>
+   192→      <p className="px-1 text-xs font-medium text-stone">{label}</p>
+   193→      <p className="mt-0.5 min-h-[20px] break-words px-1 text-sm leading-relaxed text-ink">
+   194→        {text !== "" ? (
+   195→          text
+   196→        ) : (
+   197→          <>
+   198→            <span aria-hidden="true" className="text-stone/40">—</span>
+   199→            <span className="sr-only">Not provided</span>
+   200→          </>
+   201→        )}
+   202→      </p>
+   203→    </div>
+   204→  );
+   205→}
+   206→
+   207→function PreviewYesNo({ label, value }: { label: string; value: boolean }) {
+   208→  return (
+   209→    <div className="min-w-0">
+   210→      <p className="px-1 text-xs font-medium text-stone">{label}</p>
+   211→      <p className={cn("mt-0.5 px-1 text-sm", value ? "font-medium text-ink" : "text-stone")}>
+   212→        {value ? "Yes" : "No"}
+   213→      </p>
+   214→    </div>
+   215→  );
+   216→}
+   217→
+   218→/** Read-only character reference card — name leads, only the filled rows show. */
+   219→function RefPreviewCard({ reference, index }: { reference: CharacterReference; index: number }) {
+   220→  const rows: { label: string; value?: string | null }[] = [
+   221→    { label: "Title / Position", value: reference.title },
+   222→    { label: "Company", value: reference.company },
+   223→    { label: "Company Address", value: reference.companyAddress },
+   224→    { label: "Email", value: reference.email },
+   225→    { label: "Contact No.", value: reference.contact },
+   226→  ];
+   227→  const filled = rows.filter((r) => (r.value ?? "").trim() !== "");
+   228→  return (
+   229→    <div className="rounded-3xl border border-border bg-white/80 p-4">
+   230→      <p className="text-xs font-medium text-stone">
+   231→        Reference <span className="num">{index + 1}</span>
+   232→      </p>
+   233→      <p className="mt-1 break-words px-1 text-sm font-medium text-ink">{reference.name}</p>
+   234→      {filled.length > 0 && (
+   235→        <div className="mt-2 grid grid-cols-1 gap-x-3 gap-y-2 border-t border-divider pt-2 sm:grid-cols-2">
+   236→          {filled.map((r) => (
+   237→            <PreviewRow key={r.label} label={r.label} value={r.value} />
+   238→          ))}
+   239→        </div>
+   240→      )}
+   241→    </div>
+   242→  );
+   243→}
+   244→
+   245→// ── Small field primitives (edit mode) ──────────────────────────────────────
+   246→
+   247→// Task 33 — official SignUpForm tokens: the select label uses the exact
+   248→// field-label grammar the official Input renders; the select trigger uses
+   249→// the official field tokens (h-11 capsule height, border-border, white fill
+   250→// — visible on the cloud/60 groups — the trigger's corner radius stays the
+   251→// official Select's own).
+   252→const labelCls = BEUI_FIELD_LABEL;
+   253→const inputCls = BEUI_TRIGGER_BASE;
+   254→const NONE = "__none__";
+   255→
+   256→function TextField({
+   257→  label, required, helper, value, onChange, type = "text", placeholder, error, icon, onBlur,
+   258→}: {
+   259→  label: string; required?: boolean; helper?: string; value: string;
+   260→  onChange: (v: string) => void; type?: string; placeholder?: string; error?: string;
+   261→  icon?: ReactNode; onBlur?: () => void;
+   262→}) {
+   263→  return (
+   264→    <div>
+   265→      {/* Official BEUI Input renders its own label; required fields get a
+   266→          trailing " *" (the official label prop is a plain string). Passing
+   267→          `error` arms the official shake + red ring + message; every field
+   268→          reserves its error line (auth rhythm). `icon` renders the official
+   269→          left-icon capsule; onBlur passthrough drives the Task 32 touch. */}
+   270→      <Input
+   271→        type={type}
+   272→        label={required ? `${label} *` : label}
+   273→        value={value}
+   274→        placeholder={placeholder}
+   275→        error={error}
+   276→        reserveErrorLine
+   277→        leftIcon={icon}
+   278→        classNames={{ field: BEUI_FIELD_FILL }}
+   279→        onChange={onChange}
+   280→        onBlur={onBlur}
+   281→      />
+   282→      {helper && <p className="mt-1 text-xs text-body-gray">{helper}</p>}
+   283→    </div>
+   284→  );
+   285→}
+   286→
+   287→function SelectField({
+   288→  label, required, helper, value, options, onChange,
+   289→}: {
+   290→  label: string; required?: boolean; helper?: string; value: string;
+   291→  options: string[]; onChange: (v: string) => void;
+   292→}) {
+   293→  return (
+   294→    <div>
+   295→      <Label className={labelCls}>
+   296→        {label}
+   297→        {required && <span className="text-dusty-rose"> *</span>}
+   298→      </Label>
+   299→      {/* Official BEUI Select on the official field tokens (Task 33) —
+   300→          items must carry plain-string children so the trigger label
+   301→          registration resolves (span child = raw value shown). */}
+   302→      <Select value={value !== "" ? value : NONE} onValueChange={(v) => onChange(v === NONE ? "" : v)}>
+   303→        <SelectTrigger className={inputCls}>
+   304→          <span className="sr-only">{label}</span>
+   305→          <SelectValue placeholder="Select…" />
+   306→        </SelectTrigger>
+   307→        <SelectContent>
+   308→          {options.map((o) => (
+   309→            <SelectItem key={o} value={o}>
+   310→              {o}
+   311→            </SelectItem>
+   312→          ))}
+   313→          <SelectItem value={NONE} className="text-stone">
+   314→            Not specified
+   315→          </SelectItem>
+   316→        </SelectContent>
+   317→      </Select>
+   318→      {helper && <p className="mt-1 text-xs text-body-gray">{helper}</p>}
+   319→    </div>
+   320→  );
+   321→}
+   322→
+   323→/** Collapsible disclosure group — icon + title + "X of N" count + chevron,
+   324→ *  content in a cloud-tint sub-panel. Compact default: all open. */
+   325→function CollapsibleGroup({
+   326→  icon: Icon,
+   327→  title,
+   328→  done,
+   329→  total,
+   330→  children,
+   331→  defaultOpen = true,
+   332→}: {
+   333→  icon: typeof UserRound;
+   334→  title: string;
+   335→  done: number;
+   336→  total: number;
+   337→  children: ReactNode;
+   338→  defaultOpen?: boolean;
+   339→}) {
+   340→  const [open, setOpen] = useState(defaultOpen);
+   341→  // Task 33 — the group is a SignUpForm-shaped card: rounded-3xl bordered,
+   342→  // cloud/60 surface preserved.
+   343→  return (
+   344→    <Collapsible open={open} onOpenChange={setOpen} className="rounded-3xl border border-border bg-cloud/60">
+   345→      <CollapsibleTrigger
+   346→        render={<button className="flex min-h-[44px] w-full items-center gap-2.5 p-3.5 text-left transition-colors hover:bg-white/60" />}
+   347→      >
+   348→        <Icon className="h-4 w-4 shrink-0 text-stone" aria-hidden="true" />
+   349→        <span className="min-w-0 flex-1 truncate text-sm font-medium text-ink">{title}</span>
+   350→        <span className="shrink-0 rounded-full bg-white/80 px-2.5 py-1 text-xs font-medium text-stone">
+   351→          <span className="num">{done}</span>/<span className="num">{total}</span>
+   352→        </span>
+   353→        <CollapsibleIndicator className="text-stone" />
+   354→      </CollapsibleTrigger>
+   355→      <CollapsibleContent contentClassName="border-t border-divider p-4">{children}</CollapsibleContent>
+   356→    </Collapsible>
+   357→  );
+   358→}
+   359→
+   360→function RefRow({
+   361→  index, reference, onChange, onRemove, canRemove,
+   362→}: {
+   363→  index: number; reference: CharacterReference; onChange: (patch: Partial<CharacterReference>) => void;
+   364→  onRemove: () => void; canRemove: boolean;
+   365→}) {
+   366→  const fields: { key: keyof CharacterReference; label: string; type?: string }[] = [
+   367→    { key: "name", label: "Name" },
+   368→    { key: "title", label: "Title / Position" },
+   369→    { key: "company", label: "Company" },
+   370→    { key: "companyAddress", label: "Company Address" },
+   371→    { key: "email", label: "Email", type: "email" },
+   372→    { key: "contact", label: "Contact No." },
+   373→  ];
+   374→  return (
+   375→    <div className="rounded-3xl border border-border bg-white/80 p-4">
+   376→      <div className="mb-3 flex items-center justify-between">
+   377→        <p className="text-xs font-medium text-stone">Reference <span className="num">{index + 1}</span></p>
+   378→        <button
+   379→          type="button"
+   380→          onClick={onRemove}
+   381→          disabled={!canRemove}
+   382→          className="focus-ring min-h-[44px] px-3 text-xs text-stone underline-offset-4 hover:text-[var(--bad)] hover:underline disabled:opacity-40"
+   383→        >
+   384→          Remove
+   385→        </button>
+   386→      </div>
+   387→      <div className="grid grid-cols-1 gap-x-3 gap-y-1 sm:grid-cols-2">
+   388→        {fields.map((f) => (
+   389→          <Input
+   390→            key={f.key}
+   391→            type={f.type ?? "text"}
+   392→            label={f.label}
+   393→            value={(reference[f.key] as string | null) ?? ""}
+   394→            reserveErrorLine
+   395→            onChange={(next) => onChange({ [f.key]: next })}
+   396→          />
+   397→        ))}
+   398→      </div>
+   399→    </div>
+   400→  );
+   401→}
+   402→
+   403→// ── Main section ────────────────────────────────────────────────────────────
+   404→
+   405→export default function PersonalInfoSection({
+   406→  profile,
+   407→  seed,
+   408→  refreshSession,
+   409→  onChanged,
+   410→  onUnsavedChange,
+   411→}: {
+   412→  profile: ApplicantProfile | null;
+   413→  /** Bump to force a re-seed from the server profile (after PDS auto-apply / clear). */
+   414→  seed: number;
+   415→  refreshSession: () => Promise<unknown>;
+   416→  /** Silent parent reload — fired after a successful save so the preview
+   417→   *  renders the server truth, not the pre-save snapshot. */
+   418→  onChanged?: () => void | Promise<void>;
+   419→  /** Reports whether leaving the section right now would drop unsaved edits
+   420→   *  (the view-level navigation guard). Reports false on unmount. */
+   421→  onUnsavedChange?: (unsaved: boolean) => void;
+   422→}) {
+   423→  // Task 40 — a brand-new record boots straight into edit mode (nothing to
+   424→  // preview yet); an existing record opens as the read-only preview.
+   425→  const [editing, setEditing] = useState(() => {
+   426→    const p = profile;
+   427→    if (!p) return true;
+   428→    return (
+   429→      (p.firstName ?? "").trim() === "" &&
+   430→      (p.lastName ?? "").trim() === "" &&
+   431→      (p.emailAddress ?? "").trim() === ""
+   432→    );
+   433→  });
+   434→  const [form, setForm] = useState<PersonalForm>(EMPTY_FORM);
+   435→  const [refs, setRefs] = useState<CharacterReference[]>([{ ...EMPTY_REF }]);
+   436→  const [saveState, setSaveState] = useState<"idle" | "dirty" | "saving" | "saved" | "error">("idle");
+   437→  const [discardOpen, setDiscardOpen] = useState(false);
+   438→  const [savedFlash, flashSaved] = useSavedFlash();
+   439→  const formRef = useRef(form);
+   440→  const refsRef = useRef(refs);
+   441→  const seededToken = useRef<string>("");
+   442→
+   443→  // Keep latest-value refs in sync after commit (never during render).
+   444→  useEffect(() => {
+   445→    formRef.current = form;
+   446→    refsRef.current = refs;
+   447→  }, [form, refs]);
+   448→
+   449→  // Seed (and re-seed on `seed` bumps — PDS auto-apply replaces the record)
+   450→  // from the loaded profile. Never re-seeds on plain profile updates, so an
+   451→  // in-progress edit session is never clobbered by a silent reload.
+   452→  useEffect(() => {
+   453→    if (!profile) return;
+   454→    const token = `${seed}`;
+   455→    if (seededToken.current === token) return;
+   456→    seededToken.current = token;
+   457→    setForm(seedForm(profile));
+   458→    const list = Array.isArray(profile.characterReferences) ? profile.characterReferences : [];
+   459→    setRefs(list.length > 0 ? list.map((r) => ({ ...EMPTY_REF, ...r })) : [{ ...EMPTY_REF }]);
+   460→    setSaveState("idle");
+   461→  }, [profile, seed]);
+   462→
+   463→  // Task 32 — official SignUpForm timing: rules are derived on EVERY render
+   464→  // (an error clears the moment its field is fixed); `shown` reveals a rule
+   465→  // only once the field has been left (onBlur) or Save Changes was pressed.
+   466→  // Typed over ALL PersonalForm keys (not just the ones with rules) so the
+   467→  // blur touch covers every field in the section.
+   468→  const rules: Partial<Record<keyof PersonalForm, string>> = {
+   469→    firstName: form.firstName.trim() === "" ? "First Name is required." : undefined,
+   470→    lastName: form.lastName.trim() === "" ? "Last Name is required." : undefined,
+   471→    emailAddress: form.emailAddress.trim() === "" ? "Email Address is required." : undefined,
+   472→    ...(form.adminCase && form.adminCaseDetails.trim() === ""
+   473→      ? { adminCaseDetails: "Describe the administrative case to continue." }
+   474→      : {}),
+   475→  };
+   476→  const { shown, touch, touchAll, reset, hasGaps } = useAuthErrors(rules);
+   477→
+   478→  /** Explicit-save model (Task 40): edits only mark the draft dirty —
+   479→   *  persistence happens exclusively through Save Changes. */
+   480→  const markDirty = useCallback(() => setSaveState("dirty"), []);
+   481→
+   482→  const save = useCallback(
+   483→    async () => {
+   484→      setSaveState("saving");
+   485→      try {
+   486→        const payload: Record<string, string | boolean | CharacterReference[]> = {
+   487→          ...formRef.current,
+   488→          characterReferences: refsRef.current
+   489→            .map((r) => ({
+   490→              name: (r.name ?? "").trim(),
+   491→              title: (r.title ?? "").trim(),
+   492→              company: (r.company ?? "").trim(),
+   493→              companyAddress: (r.companyAddress ?? "").trim(),
+   494→              email: (r.email ?? "").trim(),
+   495→              contact: (r.contact ?? "").trim(),
+   496→            }))
+   497→            .filter((r) => r.name !== ""), // empty-name rows filtered at save (§7.4)
+   498→        };
+   499→        await apiFetch("/api/applicant/profile", { method: "PUT", body: payload });
+   500→        setSaveState("saved");
+   501→        toast.success("Profile changes saved");
+   502→        await refreshSession();
+   503→        // Reload the parent profile BEFORE leaving edit mode so the preview
+   504→        // renders the freshly saved record, not the stale snapshot.
+   505→        await onChanged?.();
+   506→        flashSaved();
+   507→        setEditing(false);
+   508→      } catch (e) {
+   509→        setSaveState("error");
+   510→        toast.error(e instanceof Error ? e.message : "Save failed. Please try again");
+   511→      }
+   512→    },
+   513→    [refreshSession, onChanged, flashSaved]
+   514→  );
+   515→
+   516→  /** Manual save — Task 32 official SignUpForm timing: Save Changes reveals
+   517→   *  every gap at once (touchAll) and the save only proceeds when the live
+   518→   *  rules are clean; correcting a field clears its rule instantly. */
+   519→  const saveManual = useCallback(() => {
+   520→    touchAll();
+   521→    if (hasGaps) return;
+   522→    void save();
+   523→  }, [touchAll, hasGaps, save]);
+   524→
+   525→  // ── Edit-session lifecycle (Task 40) ──────────────────────────────────────
+   526→
+   527→  const enterEdit = useCallback(() => {
+   528→    if (!profile) return;
+   529→    // Seed the draft from the freshest server profile (NOT the stale local
+   530→    // form) so every edit session starts from the saved record.
+   531→    setForm(seedForm(profile));
+   532→    const list = Array.isArray(profile.characterReferences) ? profile.characterReferences : [];
+   533→    setRefs(list.length > 0 ? list.map((r) => ({ ...EMPTY_REF, ...r })) : [{ ...EMPTY_REF }]);
+   534→    seededToken.current = String(seed); // keep the seed effect from re-firing
+   535→    setSaveState("idle");
+   536→    reset();
+   537→    setEditing(true);
+   538→  }, [profile, seed, reset]);
+   539→
+   540→  const exitEdit = useCallback(() => {
+   541→    setDiscardOpen(false);
+   542→    setEditing(false);
+   543→    setSaveState("idle");
+   544→    reset();
+   545→  }, [reset]);
+   546→
+   547→  /** Cancel — instant exit when the draft is clean; confirm before discarding
+   548→   *  real edits. */
+   549→  const cancelEdit = useCallback(() => {
+   550→    if (saveState === "dirty" || saveState === "error") {
+   551→      setDiscardOpen(true);
+   552→      return;
+   553→    }
+   554→    exitEdit();
+   555→  }, [saveState, exitEdit]);
+   556→
+   557→  // ── Unsaved-changes reporting for the view-level navigation guard ─────────
+   558→
+   559→  const unsaved = editing && (saveState === "dirty" || saveState === "error");
+   560→  const unsavedCbRef = useRef(onUnsavedChange);
+   561→  useEffect(() => {
+   562→    unsavedCbRef.current = onUnsavedChange;
+   563→  });
+   564→  useEffect(() => {
+   565→    unsavedCbRef.current?.(unsaved);
+   566→  }, [unsaved]);
+   567→  // Leaving the section (section swap / route change) always clears the guard.
+   568→  useEffect(
+   569→    () => () => {
+   570→      unsavedCbRef.current?.(false);
+   571→    },
+   572→    []
+   573→  );
+   574→
+   575→  const set = useCallback(
+   576→    <K extends keyof PersonalForm>(key: K, value: PersonalForm[K]) => {
+   577→      setForm((prev) => ({ ...prev, [key]: value }));
+   578→      markDirty();
+   579→    },
+   580→    [markDirty]
+   581→  );
+   582→
+   583→  // ── View model: edit sessions render the draft; preview renders the
+   584→  //    server record (seedForm over the profile prop) so both modes share
+   585→  //    the same counts/conditionals. ────────────────────────────────────────
+   586→  const view = editing ? form : seedForm(profile);
+   587→  const namedRefs = (editing
+   588→    ? refs
+   589→    : Array.isArray(profile?.characterReferences)
+   590→      ? profile!.characterReferences!
+   591→      : []
+   592→  ).filter((r) => (r.name ?? "").trim() !== "");
+   593→
+   594→  const identityDone = filledCount(view, IDENTITY_FIELDS);
+   595→  const addressDone = filledCount(view, ADDRESS_FIELDS);
+   596→  const legalTotal = 2 + (view.adminCase ? 1 : 0) + (view.crimeCharge ? 2 : 0);
+   597→  const legalDone =
+   598→    2 +
+   599→    (view.adminCase && view.adminCaseDetails.trim() !== "" ? 1 : 0) +
+   600→    (view.crimeCharge && view.crimeDate.trim() !== "" ? 1 : 0) +
+   601→    (view.crimeCharge && view.crimeCaseStatus.trim() !== "" ? 1 : 0);
+   602→
+   603→  return (
+   604→    <SectionCard
+   605→      variant="plain"
+   606→      bareOnMobile
+   607→      icon={UserRound}
+   608→      chipTone="slate"
+   609→      title="Personal Information"
+   610→      description={
+   611→        editing
+   612→          ? "Editing — your changes apply when you save."
+   613→          : "Read-only preview — click Edit Profile to make changes."
+   614→      }
+   615→      actions={
+   616→        editing ? (
+   617→          <div className="flex flex-wrap items-center gap-3">
+   618→            <SaveHint
+   619→              saving={saveState === "saving"}
+   620→              saved={false}
+   621→              dirty={saveState === "dirty"}
+   622→              error={saveState === "error" ? "Save failed. Click Save Changes" : undefined}
+   623→            />
+   624→            <button type="button" onClick={cancelEdit} className={cancelBtn}>
+   625→              Cancel
+   626→            </button>
+   627→            <StatefulButton
+   628→              type="button"
+   629→              onClick={saveManual}
+   630→              state={saveState === "saving" ? "loading" : "idle"}
+   631→              loadingText="Saving"
+   632→              className="min-h-[44px] px-5 py-2.5 text-sm"
+   633→            >
+   634→              Save Changes
+   635→            </StatefulButton>
+   636→          </div>
+   637→        ) : (
+   638→          <div className="flex items-center gap-3">
+   639→            {/* Transient "Saved ✓" right after a successful save. */}
+   640→            <SaveHint saving={false} saved={savedFlash} />
+   641→            <button
+   642→              type="button"
+   643→              onClick={enterEdit}
+   644→              className="dlg-cta focus-ring inline-flex min-h-[44px] items-center gap-2 px-5 py-2.5 text-sm"
+   645→            >
+   646→              <Pencil className="h-4 w-4" aria-hidden="true" /> Edit Profile
+   647→            </button>
+   648→          </div>
+   649→        )
+   650→      }
+   651→    >
+   652→      <div className="space-y-3">
+   653→        {editing ? (
+   654→          <>
+   655→            {/* Group 1 — Identity (edit) */}
+   656→            <CollapsibleGroup icon={UserRound} title="Identity" done={identityDone} total={IDENTITY_FIELDS.length}>
+   657→              <div className="grid grid-cols-1 gap-x-3 gap-y-1 sm:grid-cols-2">
+   658→                <TextField label="First Name" required placeholder="e.g. Juan" icon={<User />} value={form.firstName} error={shown("firstName")} onChange={(v) => set("firstName", v)} onBlur={() => touch("firstName")} />
+   659→                <TextField label="Middle Name" icon={<User />} value={form.middleName} onChange={(v) => set("middleName", v)} onBlur={() => touch("middleName")} />
+   660→                <TextField label="Last Name" required placeholder="e.g. Dela Cruz" icon={<User />} value={form.lastName} error={shown("lastName")} onChange={(v) => set("lastName", v)} onBlur={() => touch("lastName")} />
+   661→                <TextField
+   662→                  label="Extension Name"
+   663→                  helper="e.g. Jr., Sr., III"
+   664→                  icon={<User />}
+   665→                  value={form.extensionName}
+   666→                  onChange={(v) => set("extensionName", v)}
+   667→                  onBlur={() => touch("extensionName")}
+   668→                />
+   669→                <TextField
+   670→                  label="Email Address"
+   671→                  required
+   672→                  type="email"
+   673→                  helper="Interview invites are sent to this address"
+   674→                  icon={<Mail />}
+   675→                  value={form.emailAddress}
+   676→                  error={shown("emailAddress")}
+   677→                  onChange={(v) => set("emailAddress", v)}
+   678→                  onBlur={() => touch("emailAddress")}
+   679→                />
+   680→                <TextField
+   681→                  label="Mobile Number"
+   682→                  type="tel"
+   683→                  helper="09XXXXXXXXX"
+   684→                  icon={<Phone />}
+   685→                  value={form.mobileNumber}
+   686→                  onChange={(v) => set("mobileNumber", v)}
+   687→                  onBlur={() => touch("mobileNumber")}
+   688→                />
+   689→                <TextField label="Secondary Contact No." type="tel" icon={<Phone />} value={form.contactNumber} onChange={(v) => set("contactNumber", v)} onBlur={() => touch("contactNumber")} />
+   690→                <TextField label="Birth Date" type="date" value={form.birthDate} onChange={(v) => set("birthDate", v)} onBlur={() => touch("birthDate")} />
+   691→                <TextField label="Birth Place" value={form.birthPlace} onChange={(v) => set("birthPlace", v)} onBlur={() => touch("birthPlace")} />
+   692→                <SelectField label="Gender" value={form.gender} options={["Male", "Female"]} onChange={(v) => set("gender", v)} />
+   693→                <SelectField
+   694→                  label="Civil Status"
+   695→                  value={form.civilStatus}
+   696→                  options={CIVIL_STATUS_OPTIONS}
+   697→                  onChange={(v) => set("civilStatus", v)}
+   698→                />
+   699→                <TextField label="Citizenship" value={form.citizenship} onChange={(v) => set("citizenship", v)} onBlur={() => touch("citizenship")} placeholder="Filipino" />
+   700→                <TextField label="Ethnicity" value={form.ethnicity} onChange={(v) => set("ethnicity", v)} onBlur={() => touch("ethnicity")} />
+   701→                <YesNoField label="Person with Disability (PWD)" value={form.isPwd} onChange={(v) => set("isPwd", v)} />
+   702→              </div>
+   703→            </CollapsibleGroup>
+   704→
+   705→            {/* Group 2 — Address (edit) */}
+   706→            <CollapsibleGroup icon={MapPin} title="Address" done={addressDone} total={ADDRESS_FIELDS.length}>
+   707→              <div className="grid grid-cols-1 gap-x-3 gap-y-1 sm:grid-cols-2">
+   708→                <div className="sm:col-span-2">
+   709→                  <TextField label="Present Address (full)" value={form.presentAddress} onChange={(v) => set("presentAddress", v)} onBlur={() => touch("presentAddress")} />
+   710→                </div>
+   711→                <TextField label="House Number" value={form.houseNumber} onChange={(v) => set("houseNumber", v)} onBlur={() => touch("houseNumber")} />
+   712→                <TextField label="Street" value={form.street} onChange={(v) => set("street", v)} onBlur={() => touch("street")} />
+   713→                <TextField label="Subdivision / Village" value={form.subdivision} onChange={(v) => set("subdivision", v)} onBlur={() => touch("subdivision")} />
+   714→                <TextField label="Barangay" value={form.barangay} onChange={(v) => set("barangay", v)} onBlur={() => touch("barangay")} />
+   715→                <TextField label="City / Municipality" value={form.city} onChange={(v) => set("city", v)} onBlur={() => touch("city")} />
+   716→                <TextField label="Province" value={form.province} onChange={(v) => set("province", v)} onBlur={() => touch("province")} />
+   717→                <TextField label="Country" value={form.country} onChange={(v) => set("country", v)} onBlur={() => touch("country")} />
+   718→                <TextField label="ZIP Code" value={form.zipCode} onChange={(v) => set("zipCode", v)} onBlur={() => touch("zipCode")} />
+   719→              </div>
+   720→            </CollapsibleGroup>
+   721→
+   722→            {/* Group 3 — Legal Disclosures (edit) */}
+   723→            <CollapsibleGroup icon={Scale} title="Legal Disclosures" done={legalDone} total={legalTotal}>
+   724→              <div className="grid grid-cols-1 gap-x-3 gap-y-1 sm:grid-cols-2">
+   725→                <YesNoField label="Are you a government employee?" value={form.isGovernment} onChange={(v) => set("isGovernment", v)} />
+   726→                <YesNoField label="Have you been administratively charged?" value={form.adminCase} onChange={(v) => set("adminCase", v)} />
+   727→                {form.adminCase && (
+   728→                  <div className="sm:col-span-2">
+   729→                    <Textarea
+   730→                      label="Administrative Case Details *"
+   731→                      value={form.adminCaseDetails}
+   732→                      onChange={(next) => set("adminCaseDetails", next)}
+   733→                      onBlur={() => touch("adminCaseDetails")}
+   734→                      error={shown("adminCaseDetails")}
+   735→                      reserveErrorLine
+   736→                      classNames={{ field: BEUI_FIELD_FILL }}
+   737→                      placeholder="Briefly describe the case status and particulars"
+   738→                    />
+   739→                  </div>
+   740→                )}
+   741→                <YesNoField label="Have you ever been charged of any crime?" value={form.crimeCharge} onChange={(v) => set("crimeCharge", v)} />
+   742→                {form.crimeCharge && (
+   743→                  <>
+   744→                    <TextField label="Date Filed" type="date" value={form.crimeDate} onChange={(v) => set("crimeDate", v)} onBlur={() => touch("crimeDate")} />
+   745→                    <TextField label="Case Status" value={form.crimeCaseStatus} onChange={(v) => set("crimeCaseStatus", v)} onBlur={() => touch("crimeCaseStatus")} />
+   746→                  </>
+   747→                )}
+   748→              </div>
+   749→            </CollapsibleGroup>
+   750→
+   751→            {/* Group 4 — Character References (edit) */}
+   752→            <CollapsibleGroup icon={Users} title="Character References" done={namedRefs.length} total={5}>
+   753→              <div className="space-y-3">
+   754→                {refs.map((r, i) => (
+   755→                  <RefRow
+   756→                    key={i}
+   757→                    index={i}
+   758→                    reference={r}
+   759→                    canRemove={refs.length > 1}
+   760→                    onChange={(patch) => {
+   761→                      setRefs((prev) => prev.map((row, j) => (j === i ? { ...row, ...patch } : row)));
+   762→                      markDirty();
+   763→                    }}
+   764→                    onRemove={() => {
+   765→                      if (refs.length <= 1) {
+   766→                        toast.info("At least one character reference row is kept");
+   767→                        return;
+   768→                      }
+   769→                      setRefs((prev) => prev.filter((_, j) => j !== i));
+   770→                      markDirty();
+   771→                    }}
+   772→                  />
+   773→                ))}
+   774→              </div>
+   775→              <button
+   776→                type="button"
+   777→                onClick={() => {
+   778→                  if (refs.length >= 5) {
+   779→                    toast.info("You can add up to 5 character references");
+   780→                    return;
+   781→                  }
+   782→                  setRefs((prev) => [...prev, { ...EMPTY_REF }]);
+   783→                  markDirty();
+   784→                }}
+   785→                className="dlg-ghost mt-3 inline-flex min-h-[44px] w-full items-center justify-center gap-2 py-2.5 text-sm sm:w-auto sm:px-6"
+   786→              >
+   787→                <Plus className="h-4 w-4" /> Add Character Reference
+   788→              </button>
+   789→            </CollapsibleGroup>
+   790→          </>
+   791→        ) : (
+   792→          <>
+   793→            {/* Group 1 — Identity (preview) */}
+   794→            <CollapsibleGroup icon={UserRound} title="Identity" done={identityDone} total={IDENTITY_FIELDS.length}>
+   795→              <div className="grid grid-cols-1 gap-x-3 gap-y-3 sm:grid-cols-2">
+   796→                <PreviewRow label="First Name" value={view.firstName} />
+   797→                <PreviewRow label="Middle Name" value={view.middleName} />
+   798→                <PreviewRow label="Last Name" value={view.lastName} />
+   799→                <PreviewRow label="Extension Name" value={view.extensionName} />
+   800→                <PreviewRow label="Email Address" value={view.emailAddress} />
+   801→                <PreviewRow label="Mobile Number" value={view.mobileNumber} />
+   802→                <PreviewRow label="Secondary Contact No." value={view.contactNumber} />
+   803→                <PreviewRow label="Birth Date" value={formatDate(view.birthDate)} />
+   804→                <PreviewRow label="Birth Place" value={view.birthPlace} />
+   805→                <PreviewRow label="Gender" value={view.gender} />
+   806→                <PreviewRow label="Civil Status" value={view.civilStatus} />
+   807→                <PreviewRow label="Citizenship" value={view.citizenship} />
+   808→                <PreviewRow label="Ethnicity" value={view.ethnicity} />
+   809→                <PreviewYesNo label="Person with Disability (PWD)" value={view.isPwd} />
+   810→              </div>
+   811→            </CollapsibleGroup>
+   812→
+   813→            {/* Group 2 — Address (preview) */}
+   814→            <CollapsibleGroup icon={MapPin} title="Address" done={addressDone} total={ADDRESS_FIELDS.length}>
+   815→              <div className="grid grid-cols-1 gap-x-3 gap-y-3 sm:grid-cols-2">
+   816→                <PreviewRow label="Present Address (full)" value={view.presentAddress} full />
+   817→                <PreviewRow label="House Number" value={view.houseNumber} />
+   818→                <PreviewRow label="Street" value={view.street} />
+   819→                <PreviewRow label="Subdivision / Village" value={view.subdivision} />
+   820→                <PreviewRow label="Barangay" value={view.barangay} />
+   821→                <PreviewRow label="City / Municipality" value={view.city} />
+   822→                <PreviewRow label="Province" value={view.province} />
+   823→                <PreviewRow label="Country" value={view.country} />
+   824→                <PreviewRow label="ZIP Code" value={view.zipCode} />
+   825→              </div>
+   826→            </CollapsibleGroup>
+   827→
+   828→            {/* Group 3 — Legal Disclosures (preview) — conditional detail rows
+   829→                mirror the edit-mode conditionals. */}
+   830→            <CollapsibleGroup icon={Scale} title="Legal Disclosures" done={legalDone} total={legalTotal}>
+   831→              <div className="grid grid-cols-1 gap-x-3 gap-y-3 sm:grid-cols-2">
+   832→                <PreviewYesNo label="Are you a government employee?" value={view.isGovernment} />
+   833→                <PreviewYesNo label="Have you been administratively charged?" value={view.adminCase} />
+   834→                {view.adminCase && (
+   835→                  <PreviewRow label="Administrative Case Details" value={view.adminCaseDetails} full />
+   836→                )}
+   837→                <PreviewYesNo label="Have you ever been charged of any crime?" value={view.crimeCharge} />
+   838→                {view.crimeCharge && (
+   839→                  <>
+   840→                    <PreviewRow label="Date Filed" value={formatDate(view.crimeDate)} />
+   841→                    <PreviewRow label="Case Status" value={view.crimeCaseStatus} />
+   842→                  </>
+   843→                )}
+   844→              </div>
+   845→            </CollapsibleGroup>
+   846→
+   847→            {/* Group 4 — Character References (preview) — named rows only,
+   848→                name-led cards showing filled fields. */}
+   849→            <CollapsibleGroup icon={Users} title="Character References" done={namedRefs.length} total={5}>
+   850→              {namedRefs.length === 0 ? (
+   851→                <p className="px-1 py-2 text-sm text-stone">
+   852→                  No character references added yet — click Edit Profile to add up to 5.
+   853→                </p>
+   854→              ) : (
+   855→                <div className="space-y-3">
+   856→                  {namedRefs.map((r, i) => (
+   857→                    <RefPreviewCard key={i} reference={r} index={i} />
+   858→                  ))}
+   859→                </div>
+   860→              )}
+   861→            </CollapsibleGroup>
+   862→          </>
+   863→        )}
+   864→      </div>
+   865→
+   866→      {/* Task 40 — Cancel with unsaved edits: explicit discard confirmation
+   867→          (autosave is retired in the preview/edit model, so Cancel is the
+   868→          only path that can silently drop work — it must ask first). */}
+   869→      <AlertDialog open={discardOpen} onOpenChange={setDiscardOpen}>
+   870→        <AlertDialogContent className="dlg-card-plain">
+   871→          <AlertDialogHeader>
+   872→            <AlertDialogTitle className="font-display text-2xl text-ink">Discard unsaved changes?</AlertDialogTitle>
+   873→            <AlertDialogDescription className="text-sm leading-relaxed text-stone">
+   874→              Your edits to Personal Information haven&apos;t been saved yet. Discarding cannot be undone — your
+   875→              profile will keep its last saved values.
+   876→            </AlertDialogDescription>
+   877→          </AlertDialogHeader>
+   878→          <AlertDialogFooter>
+   879→            <AlertDialogCancel className={cancelBtn}>Keep editing</AlertDialogCancel>
+   880→            <AlertDialogAction
+   881→              onClick={(e) => {
+   882→                e.preventDefault();
+   883→                exitEdit();
+   884→              }}
+   885→              className={ghostBadBtn}
+   886→            >
+   887→              Discard changes
+   888→            </AlertDialogAction>
+   889→          </AlertDialogFooter>
+   890→        </AlertDialogContent>
+   891→      </AlertDialog>
+   892→    </SectionCard>
+   893→  );
+   894→}
+   895→

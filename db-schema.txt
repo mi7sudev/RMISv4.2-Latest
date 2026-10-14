@@ -1,0 +1,336 @@
+=== Applicant ===
+  id | INTEGER | NOT NULL | PK
+  userId | TEXT
+  employeeNumber | TEXT
+  firstName | TEXT
+  middleName | TEXT
+  lastName | TEXT
+  extensionName | TEXT
+  nickname | TEXT
+  mobileNumber | TEXT
+  contactNumber | TEXT
+  contactNumberSec | TEXT
+  telephoneNumber | TEXT
+  emailAddress | TEXT
+  birthDate | TEXT
+  birthPlace | TEXT
+  gender | TEXT
+  civilStatus | TEXT
+  citizenship | TEXT
+  height | TEXT
+  weight | TEXT
+  bloodType | TEXT
+  religion | TEXT
+  ethnicity | TEXT
+  isPwd | BOOLEAN | NOT NULL
+  houseNumber | TEXT
+  street | TEXT
+  subdivision | TEXT
+  barangay | TEXT
+  city | TEXT
+  province | TEXT
+  country | TEXT
+  zipCode | TEXT
+  presentAddress | TEXT
+  permanentHouseNumber | TEXT
+  permanentStreet | TEXT
+  permanentSubdivision | TEXT
+  permanentBarangay | TEXT
+  permanentCity | TEXT
+  permanentProvince | TEXT
+  permanentZipCode | TEXT
+  pagibig | TEXT
+  gsis | TEXT
+  philhealth | TEXT
+  tin | TEXT
+  sss | TEXT
+  govtIssuedId | TEXT
+  govtIdIssuedNumber | TEXT
+  govtIdIssuedPlace | TEXT
+  govtIdDateIssued | TEXT
+  govtIdValidUntil | TEXT
+  isGovernment | BOOLEAN | NOT NULL
+  pendingCases | TEXT
+  adminCase | BOOLEAN | NOT NULL
+  adminCaseDetails | TEXT
+  crimeCharge | BOOLEAN | NOT NULL
+  crimeDate | TEXT
+  crimeCaseStatus | TEXT
+  characterReference | TEXT
+  specifyReferral | TEXT
+  remarks | TEXT
+  qualified | BOOLEAN | NOT NULL
+  isProfileComplete | BOOLEAN | NOT NULL
+  submittedDate | DATETIME
+  createdAt | DATETIME | NOT NULL
+  updatedAt | DATETIME | NOT NULL
+
+=== Application ===
+  id | INTEGER | NOT NULL | PK
+  applicantId | INTEGER | NOT NULL
+  jobId | INTEGER | NOT NULL
+  status | TEXT | NOT NULL
+  reason | TEXT
+  dateApplied | DATETIME | NOT NULL
+  updatedAt | DATETIME | NOT NULL
+  snapshotProfile | TEXT
+  snapshotEducations | TEXT
+  snapshotExperiences | TEXT
+  snapshotTrainings | TEXT
+  snapshotEligibilities | TEXT
+  snapshotAwards | TEXT
+
+=== AuditLog ===
+  id | INTEGER | NOT NULL | PK
+  timestamp | DATETIME | NOT NULL
+  userId | TEXT
+  userLabel | TEXT
+  userRole | TEXT
+  action | TEXT | NOT NULL
+  entityType | TEXT
+  entityId | TEXT
+  description | TEXT
+  ipAddress | TEXT
+
+=== Award ===
+  id | INTEGER | NOT NULL | PK
+  applicantId | INTEGER | NOT NULL
+  recognitionType | TEXT
+  scope | TEXT
+  details | TEXT
+  category | TEXT
+  provider | TEXT
+  dateGranted | TEXT
+  points | INTEGER
+  hrRemarks | TEXT
+  ord | REAL | NOT NULL
+  createdAt | DATETIME | NOT NULL
+
+=== ContactRequest ===
+  id | INTEGER | NOT NULL | PK
+  name | TEXT | NOT NULL
+  email | TEXT | NOT NULL
+  subject | TEXT | NOT NULL
+  message | TEXT | NOT NULL
+  status | TEXT | NOT NULL
+  handledById | TEXT
+  createdAt | DATETIME | NOT NULL
+  resolvedAt | DATETIME
+
+=== Course ===
+  id | INTEGER | NOT NULL | PK
+  name | TEXT | NOT NULL
+  abbreviation | TEXT
+  category | TEXT
+  level | TEXT
+
+=== Document ===
+  id | TEXT | NOT NULL | PK
+  applicantId | INTEGER | NOT NULL
+  uploadedById | TEXT
+  fileName | TEXT | NOT NULL
+  originalName | TEXT | NOT NULL
+  mimeType | TEXT | NOT NULL
+  size | INTEGER | NOT NULL
+  filePath | TEXT | NOT NULL
+  category | TEXT | NOT NULL
+  status | TEXT | NOT NULL
+  extractedJson | TEXT
+  extractionError | TEXT
+  extractedAt | DATETIME
+  createdAt | DATETIME | NOT NULL
+  updatedAt | DATETIME | NOT NULL
+  qualityScore | INTEGER
+
+=== DropdownOption ===
+  id | INTEGER | NOT NULL | PK
+  fieldKey | TEXT | NOT NULL
+  value | TEXT | NOT NULL
+  valueKey | TEXT | NOT NULL
+  label | TEXT | NOT NULL
+  hint | TEXT
+  createdById | TEXT
+  createdByLabel | TEXT
+  createdAt | DATETIME | NOT NULL
+
+=== Education ===
+  id | INTEGER | NOT NULL | PK
+  applicantId | INTEGER | NOT NULL
+  educationLevel | TEXT
+  degree | TEXT
+  course | TEXT
+  specifyOthers | TEXT
+  schoolName | TEXT
+  ongoing | BOOLEAN | NOT NULL
+  isHighestEducation | BOOLEAN | NOT NULL
+  yearFrom | TEXT
+  yearTo | TEXT
+  highestLevel | TEXT
+  unitsEarned | TEXT
+  yearGraduated | TEXT
+  awards | TEXT
+  hrRemarks | TEXT
+  ord | REAL | NOT NULL
+  createdAt | DATETIME | NOT NULL
+
+=== Eligibility ===
+  id | INTEGER | NOT NULL | PK
+  applicantId | INTEGER | NOT NULL
+  title | TEXT | NOT NULL
+  rating | TEXT
+  examDate | TEXT
+  examPlace | TEXT
+  licenseNumber | TEXT
+  licenseValidity | TEXT
+  hrRemarks | TEXT
+  ord | REAL | NOT NULL
+  createdAt | DATETIME | NOT NULL
+
+=== EligibilityRef ===
+  id | INTEGER | NOT NULL | PK
+  name | TEXT | NOT NULL
+  index | INTEGER | NOT NULL
+
+=== EmailLog ===
+  id | INTEGER | NOT NULL | PK
+  to | TEXT | NOT NULL
+  subject | TEXT | NOT NULL
+  bodyText | TEXT
+  bodyHtml | TEXT
+  provider | TEXT | NOT NULL
+  status | TEXT | NOT NULL
+  providerRef | TEXT
+  error | TEXT
+  relatedType | TEXT
+  relatedId | INTEGER
+  attachments | TEXT
+  createdAt | DATETIME | NOT NULL
+
+=== EmailOtp ===
+  id | TEXT | NOT NULL | PK
+  email | TEXT | NOT NULL
+  codeHash | TEXT | NOT NULL
+  purpose | TEXT | NOT NULL
+  expiresAt | DATETIME | NOT NULL
+  attempts | INTEGER | NOT NULL
+  consumedAt | DATETIME
+  createdAt | DATETIME | NOT NULL
+
+=== JobPosting ===
+  id | INTEGER | NOT NULL | PK
+  title | TEXT | NOT NULL
+  positionType | TEXT
+  numberOfVacancy | INTEGER
+  briefDescription | TEXT
+  briefDescriptionHtml | TEXT
+  dutiesResponsibilities | TEXT
+  dutiesHtml | TEXT
+  compensationPackage | TEXT
+  compensationHtml | TEXT
+  otherQualifications | TEXT
+  otherQualificationsHtml | TEXT
+  publishDate | DATETIME
+  deadlineDate | DATETIME
+  processingDate | DATETIME
+  positionId | INTEGER
+  authorId | TEXT
+  publishedAt | DATETIME | NOT NULL
+  createdAt | DATETIME | NOT NULL
+  updatedAt | DATETIME | NOT NULL
+
+=== Notification ===
+  id | INTEGER | NOT NULL | PK
+  applicantId | INTEGER | NOT NULL
+  name | TEXT | NOT NULL
+  description | TEXT | NOT NULL
+  read | BOOLEAN | NOT NULL
+  createdAt | DATETIME | NOT NULL
+
+=== PlaceOfAssignment ===
+  id | INTEGER | NOT NULL | PK
+  name | TEXT | NOT NULL
+
+=== Position ===
+  id | INTEGER | NOT NULL | PK
+  itemNumber | TEXT
+  positionTitle | TEXT | NOT NULL
+  positionType | TEXT
+  division | TEXT
+  placeOfAssignment | TEXT
+  salaryGrade | TEXT
+  salaryStep | TEXT
+  salaryAmount | REAL
+  cscEducation | TEXT
+  cscEligibility | TEXT
+  cscEligibilityGroup | TEXT
+  cscWorkExperience | TEXT
+  cscTraining | TEXT
+  license | TEXT
+  preferredQualification | TEXT
+  createdAt | DATETIME | NOT NULL
+  updatedAt | DATETIME | NOT NULL
+
+=== SmsLog ===
+  id | INTEGER | NOT NULL | PK
+  to | TEXT | NOT NULL
+  message | TEXT | NOT NULL
+  provider | TEXT | NOT NULL
+  status | TEXT | NOT NULL
+  providerRef | TEXT
+  error | TEXT
+  relatedType | TEXT
+  relatedId | INTEGER
+  createdAt | DATETIME | NOT NULL
+
+=== Training ===
+  id | INTEGER | NOT NULL | PK
+  applicantId | INTEGER | NOT NULL
+  title | TEXT
+  typeOfTraining | TEXT
+  specifyTraining | TEXT
+  numberHours | INTEGER
+  hourDecimal | REAL
+  isPresentWork | BOOLEAN | NOT NULL
+  isGovtService | BOOLEAN | NOT NULL
+  dateFrom | DATETIME
+  dateTo | DATETIME
+  hrRemarks | TEXT
+  ord | REAL | NOT NULL
+  createdAt | DATETIME | NOT NULL
+
+=== User ===
+  id | TEXT | NOT NULL | PK
+  username | TEXT | NOT NULL
+  email | TEXT | NOT NULL
+  password | TEXT | NOT NULL
+  firstName | TEXT
+  middleName | TEXT
+  lastName | TEXT
+  role | TEXT | NOT NULL
+  blocked | BOOLEAN | NOT NULL
+  confirmed | BOOLEAN | NOT NULL
+  createdAt | DATETIME | NOT NULL
+  updatedAt | DATETIME | NOT NULL
+
+=== WorkExperience ===
+  id | INTEGER | NOT NULL | PK
+  applicantId | INTEGER | NOT NULL
+  positionTitle | TEXT
+  employerName | TEXT
+  employerAddress | TEXT
+  isPresentWork | BOOLEAN | NOT NULL
+  isGovtService | BOOLEAN | NOT NULL
+  dateFrom | DATETIME
+  dateTo | DATETIME
+  statusOfEmployment | TEXT
+  monthlySalary | REAL
+  supervisorName | TEXT
+  supervisorPosition | TEXT
+  office | TEXT
+  reasonForLeaving | TEXT
+  accomplishment | TEXT
+  actualDuties | TEXT
+  hrRemarks | TEXT
+  yearDecimal | REAL
+  ord | REAL | NOT NULL
+  createdAt | DATETIME | NOT NULL

@@ -1,0 +1,648 @@
+     1→"use client";
+     2→
+     3→// ============================================================================
+     4→// RMIS — Profile builder (Bevel edition, CREDENTIALS-FIRST per user):
+     5→// the page IS the 7-section FORM WORKFLOW — no identity header at all
+     6→// (Task 22: the slim strip was removed too; the completion ring lives in the
+     7→// Home mini profile and the identity surface is gone with it). While the
+     8→// record is incomplete, a quiet foot row above the optional PDS import
+     9→// carries the completion note + Mark Complete CTA. PDS auto-fill stays a
+    10→// demoted OPTIONAL collapsible at the very foot (manual form filling is
+    11→// the primary path; auto-fill is a shortcut).
+    12→// Section navigation is breakpoint-split: desktop (lg+) pins a numbered
+    13→// workflow band (capsule done/current/ahead chips joined by hairline
+    14→// connectors, two-line labels with time estimates); phones get a compact
+    15→// iOS-style strip — a sticky rounded white card holding the 7 status cells
+    16→// (sliding brand-blue thumb) over a prev/next caption bar. Sections render
+    17→// as white dlg-card-plain panels in one full-width column.
+    18→// Data logic unchanged: parallel loads, silent reloads, session refresh.
+    19→// ============================================================================
+    20→
+    21→import { Fragment, useCallback, useEffect, useRef, useState } from "react";
+    22→import { motion } from "framer-motion";
+    23→import { toast } from "@/lib/toast";
+    24→import {
+    25→  Check,
+    26→  CheckCircle2,
+    27→  ChevronLeft,
+    28→  ChevronRight,
+    29→  Circle,
+    30→  Info,
+    31→  ShieldCheck,
+    32→} from "lucide-react";
+    33→import {
+    34→  AlertDialog,
+    35→  AlertDialogAction,
+    36→  AlertDialogCancel,
+    37→  AlertDialogContent,
+    38→  AlertDialogDescription,
+    39→  AlertDialogFooter,
+    40→  AlertDialogHeader,
+    41→  AlertDialogTitle,
+    42→} from "@/components/ui/alert-dialog";
+    43→import { ErrorCard, SkeletonRows } from "@/components/ui/shell";
+    44→import { cancelBtn, ghostBadBtn } from "@/components/ui/buttons";
+    45→import { apiFetch } from "@/lib/client";
+    46→import { computeProfileCompletion } from "@/lib/profile-completion";
+    47→import { useSession } from "@/components/session-provider";
+    48→import { navigate } from "@/lib/router";
+    49→import type { DocumentWire } from "@/lib/router";
+    50→import { cn } from "@/lib/utils";
+    51→import PdsUploadCard from "./profile/pds-upload-card";
+    52→import PersonalInfoSection from "./profile/personal-info-section";
+    53→import EducationSection from "./profile/education-section";
+    54→import WorkExperienceSection from "./profile/work-experience-section";
+    55→import TrainingSection from "./profile/training-section";
+    56→import EligibilitySection from "./profile/eligibility-section";
+    57→import AwardsSection from "./profile/awards-section";
+    58→import DocumentsSection from "./profile/documents-section";
+    59→import type { ApplicantProfile, ReferenceData } from "./profile/section-types";
+    60→
+    61→const SECTIONS = [
+    62→  { n: 1, num: "01", label: "Personal Information", short: "Personal", minutes: 8 },
+    63→  { n: 2, num: "02", label: "Education", short: "Education", minutes: 3 },
+    64→  { n: 3, num: "03", label: "Work Experience", short: "Work", minutes: 5 },
+    65→  { n: 4, num: "04", label: "Training", short: "Training", minutes: 2 },
+    66→  { n: 5, num: "05", label: "Eligibility", short: "Eligibility", minutes: 3 },
+    67→  { n: 6, num: "06", label: "Awards", short: "Awards", minutes: 2 },
+    68→  { n: 7, num: "07", label: "Supporting Documents", short: "Documents", minutes: null as number | null },
+    69→];
+    70→
+    71→export default function ProfileView() {
+    72→  const { refresh } = useSession();
+    73→  const sectionsRef = useRef<HTMLDivElement>(null);
+    74→  const [profile, setProfile] = useState<ApplicantProfile | null>(null);
+    75→  const [reference, setReference] = useState<ReferenceData | null>(null);
+    76→  const [docs, setDocs] = useState<DocumentWire[]>([]);
+    77→  const [loading, setLoading] = useState(true);
+    78→  const [error, setError] = useState<string | null>(null);
+    79→  const [active, setActive] = useState(1);
+    80→  const [seed, setSeed] = useState(0);
+    81→  const [markOpen, setMarkOpen] = useState(false);
+    82→  const [marking, setMarking] = useState(false);
+    83→
+    84→  // Task 40 — unsaved-changes guard. PersonalInfoSection (the only section
+    85→  // with a live edit session) reports (editing && dirty) upward; any
+    86→  // navigation out of section 01 while the flag is up is confirmed BEFORE
+    87→  // the section unmounts and drops the draft. pendingNav holds the
+    88→  // destination (a section number, or "home" for Return to Portal) until
+    89→  // the applicant chooses.
+    90→  const [hasUnsaved, setHasUnsaved] = useState(false);
+    91→  const handleUnsavedChange = useCallback((u: boolean) => setHasUnsaved(u), []);
+    92→  const [pendingNav, setPendingNav] = useState<number | "home" | null>(null);
+    93→  const [navOpen, setNavOpen] = useState(false);
+    94→
+    95→  const loadAll = useCallback(async (silent: boolean) => {
+    96→    if (!silent) setLoading(true);
+    97→    try {
+    98→      const [profileRes, docsRes] = await Promise.all([
+    99→        apiFetch<ApplicantProfile>("/api/applicant/profile"),
+   100→        apiFetch<DocumentWire[]>("/api/applicant/documents"),
+   101→      ]);
+   102→      setProfile(profileRes);
+   103→      setDocs(docsRes);
+   104→      setError(null);
+   105→    } catch (e) {
+   106→      if (!silent) setError(e instanceof Error ? e.message : "Unable to load your profile");
+   107→    } finally {
+   108→      if (!silent) setLoading(false);
+   109→    }
+   110→  }, []);
+   111→
+   112→  useEffect(() => {
+   113→    void (async () => {
+   114→      try {
+   115→        const ref = await apiFetch<ReferenceData>("/api/reference");
+   116→        setReference(ref);
+   117→      } catch {
+   118→        // Reference data is optional (datalist/eligibility suggestions).
+   119→      }
+   120→      await loadAll(false);
+   121→    })();
+   122→  }, [loadAll]);
+   123→
+   124→  const reloadSilent = useCallback(async () => {
+   125→    await loadAll(true);
+   126→  }, [loadAll]);
+   127→
+   128→  /** After PDS auto-apply / clear: reload AND re-seed the personal form. */
+   129→  const onProfileReplaced = useCallback(async () => {
+   130→    await loadAll(true);
+   131→    setSeed((s) => s + 1);
+   132→  }, [loadAll]);
+   133→
+   134→  // ── Completeness (§7.4) — shared math with the Home mini-profile ring ─────
+   135→  const { sectionDone, isComplete, canMarkComplete } = computeProfileCompletion(profile, docs);
+   136→
+   137→  const markComplete = async () => {
+   138→    setMarking(true);
+   139→    try {
+   140→      await apiFetch("/api/applicant/profile", { method: "PUT", body: { isProfileComplete: true } });
+   141→      toast.success("Profile marked as complete", {
+   142→        description: "You can now apply to open positions. HR verifies your credentials at the next stage.",
+   143→      });
+   144→      setMarkOpen(false);
+   145→      await refresh();
+   146→      await reloadSilent();
+   147→    } catch (e) {
+   148→      toast.error(e instanceof Error ? e.message : "Unable to mark your profile complete");
+   149→    } finally {
+   150→      setMarking(false);
+   151→    }
+   152→  };
+   153→
+   154→  // ── Mobile stepper: switch section AND bring the rail back into view —
+   155→  // tapping "04" while stranded deep inside section 01's long form must not
+   156→  // leave the viewport mid-scroll in the old section. Desktop (lg+) skips
+   157→  // this: the nav band is sticky above the content, no jump needed.
+   158→  const mobileNavRef = useRef<HTMLElement>(null);
+   159→
+   160→  function changeSection(n: number) {
+   161→    if (n === active) return;
+   162→    setActive(n);
+   163→    if (typeof window !== "undefined" && window.innerWidth < 1024) {
+   164→      // The strip lives ABOVE the swapped section content, so its document
+   165→      // position is layout-stable across the swap — unlike the wrapper's.
+   166→      // Double rAF lets React commit the new section first, then we jump
+   167→      // INSTANTLY (smooth is canceled by Chrome's scroll-anchoring yank,
+   168→      // which fires while the tall section replaces the short one and
+   169→      // re-anchors the viewport to keep the old bottom edge in view). The
+   170→      // instant jump lands the pinned strip right under the top bar; the
+   171→      // 200ms content fade masks the transition.
+   172→      // Task 34-b — the workspace page no longer scrolls the WINDOW below
+   173→      // lg: the official PullToRefresh container in the app shell is the
+   174→      // scroller (window.scrollY is always 0 there). So the jump targets
+   175→      // the strip's nearest scrollable ancestor and lands it at that
+   176→      // scrollport's top — where the strip (sticky top-0) pins right under
+   177→      // the mobile top bar. The window path stays as the fallback for any
+   178→      // layout without the container.
+   179→      requestAnimationFrame(() => {
+   180→        requestAnimationFrame(() => {
+   181→          const el = mobileNavRef.current;
+   182→          if (!el) return;
+   183→          let scroller: HTMLElement | null = el.parentElement;
+   184→          while (scroller && scroller !== document.body) {
+   185→            const oy = getComputedStyle(scroller).overflowY;
+   186→            if (oy === "auto" || oy === "scroll") break;
+   187→            scroller = scroller.parentElement;
+   188→          }
+   189→          if (scroller && scroller !== document.body) {
+   190→            const top =
+   191→              el.getBoundingClientRect().top -
+   192→              scroller.getBoundingClientRect().top +
+   193→              scroller.scrollTop;
+   194→            scroller.scrollTo({ top: Math.max(0, top), behavior: "instant" });
+   195→          } else {
+   196→            const top = el.getBoundingClientRect().top + window.scrollY - 72;
+   197→            window.scrollTo({ top: Math.max(0, top), behavior: "instant" });
+   198→          }
+   199→        });
+   200→      });
+   201→    }
+   202→  }
+   203→
+   204→  // Task 40 — guarded navigation: while section 01 holds unsaved edits,
+   205→  // every section switch / portal exit routes through the confirm dialog
+   206→  // (pendingNav remembers the destination the applicant asked for).
+   207→  function requestSection(n: number) {
+   208→    if (n === active) return;
+   209→    if (hasUnsaved) {
+   210→      setPendingNav(n);
+   211→      setNavOpen(true);
+   212→      return;
+   213→    }
+   214→    changeSection(n);
+   215→  }
+   216→
+   217→  function requestPortalExit() {
+   218→    if (hasUnsaved) {
+   219→      setPendingNav("home");
+   220→      setNavOpen(true);
+   221→      return;
+   222→    }
+   223→    navigate("home");
+   224→  }
+   225→
+   226→  function confirmLeave() {
+   227→    setNavOpen(false);
+   228→    const dest = pendingNav;
+   229→    setPendingNav(null);
+   230→    setHasUnsaved(false); // the section unmounts below; keep the flag in sync
+   231→    if (dest === "home") navigate("home");
+   232→    else if (dest != null) changeSection(dest);
+   233→  }
+   234→
+   235→  // Index of the active section — drives the mobile caption + prev/next.
+   236→  const activeIdx = Math.max(
+   237→    0,
+   238→    SECTIONS.findIndex((s) => s.n === active)
+   239→  );
+   240→
+   241→  // The section content column is a bounded scroll container (min/max height
+   242→  // with an internal scrollbar), so every freshly-swapped section must land
+   243→  // at its own top — otherwise switching from a short into a tall section
+   244→  // inherits the previous section's inner scroll offset.
+   245→  useEffect(() => {
+   246→    sectionsRef.current?.scrollTo({ top: 0 });
+   247→  }, [active]);
+   248→
+   249→  // ── Loading / error states ────────────────────────────────────────────────
+   250→  if (loading) {
+   251→    return (
+   252→      <div className="space-y-6">
+   253→        {/* Section nav skeleton — desktop band / mobile strip */}
+   254→        <div className="glass hidden border-b border-border px-8 py-4 lg:block">
+   255→          <div className="flex gap-6 overflow-hidden">
+   256→            {SECTIONS.map((s) => (
+   257→              <div key={s.n} className="skel h-9 w-24 shrink-0" />
+   258→            ))}
+   259→          </div>
+   260→        </div>
+   261→        <div className="dlg-card-plain p-1.5 lg:hidden">
+   262→          <div className="grid grid-cols-7 gap-0.5">
+   263→            {SECTIONS.map((s) => (
+   264→              <div key={s.n} className="skel h-9 w-full" />
+   265→            ))}
+   266→          </div>
+   267→        </div>
+   268→        <div>
+   269→          <SkeletonRows rows={4} rowClassName="h-20" />
+   270→        </div>
+   271→      </div>
+   272→    );
+   273→  }
+   274→
+   275→  if (error && !profile) {
+   276→    return (
+   277→      <div className="space-y-6">
+   278→        {/* Canonical error branch — the shared shell ErrorCard (same anatomy
+   279→            as review-queue/recruitment/candidates/jobs-view). */}
+   280→        <ErrorCard
+   281→          title="Couldn't load your profile"
+   282→          description={error}
+   283→          onRetry={() => void loadAll(false)}
+   284→        />
+   285→      </div>
+   286→    );
+   287→  }
+   288→
+   289→  return (
+   290→    <div className="space-y-6">
+   291→      {/* The view has no PageHeader by design (the sticky step band opens the
+   292→          page) — this visually-hidden h1 keeps the document outline valid for
+   293→          screen readers and the ⌘K / breadcrumbs context. */}
+   294→      <h1 className="sr-only">My Profile</h1>
+   295→      {/* ── D. Section navigation (lg+) — sticky numbered workflow band.
+   296→              Desktop content column has no sticky header above it, so the
+   297→              band pins to the very top of the viewport. NOT scrollable by
+   298→              design: the row always fits its container. Below xl the items
+   299→              compact (28px chips · 11.5px labels · "Approx" line hidden);
+   300→              from xl up the full register renders (32px chips · 13.5px
+   301→              labels · "Approx N Min" second line). Hairline connectors are
+   302→              flex-1 so they absorb any leftover width. ── */}
+   303→      <nav
+   304→        aria-label="Profile section steps"
+   305→        className="glass sticky top-0 z-20 -mx-4 hidden border-b border-border px-4 py-3 sm:-mx-6 sm:px-6 lg:block lg:-mx-8 lg:px-8"
+   306→      >
+   307→        <ol className="flex items-center">
+   308→          {SECTIONS.map((s, i) => {
+   309→            const isActive = active === s.n;
+   310→            const done = sectionDone[s.n - 1];
+   311→            const reached = done || isActive;
+   312→            const approx = s.minutes != null ? `Approx ${s.minutes} Min` : null;
+   313→            return (
+   314→              <Fragment key={s.n}>
+   315→                {i > 0 && <li aria-hidden="true" className="h-px min-w-1 flex-1 bg-divider xl:min-w-4" />}
+   316→                <li className="shrink-0">
+   317→                  <button
+   318→                    type="button"
+   319→                    onClick={() => requestSection(s.n)}
+   320→                    aria-current={isActive ? "step" : undefined}
+   321→                    aria-label={`Section ${i + 1}: ${s.label}`}
+   322→                    className="focus-ring group flex items-center gap-2 py-1 pl-0.5 pr-1 transition-colors xl:gap-2.5"
+   323→                  >
+   324→                    <span
+   325→                      aria-hidden="true"
+   326→                      className={cn(
+   327→                        "grid h-7 w-7 shrink-0 place-items-center rounded-full border text-[11px] font-medium tabular-nums transition-colors duration-200 xl:h-8 xl:w-8 xl:text-[12px]",
+   328→                        reached
+   329→                          ? "border-transparent bg-primary text-primary-foreground"
+   330→                          : "border-divider bg-white text-stone group-hover:border-metric-blue/40 group-hover:text-ink"
+   331→                      )}
+   332→                    >
+   333→                      {done ? <Check className="h-3.5 w-3.5" strokeWidth={3} /> : s.num}
+   334→                    </span>
+   335→                    <span className="flex min-w-0 flex-col leading-tight">
+   336→                      <span
+   337→                        className={cn(
+   338→                          "whitespace-nowrap text-[11px] font-medium transition-colors xl:text-[13px]",
+   339→                          reached ? "text-ink" : "text-stone group-hover:text-ink"
+   340→                        )}
+   341→                      >
+   342→                        {s.short}
+   343→                      </span>
+   344→                      {approx && (
+   345→                        <span className="mt-0.5 hidden whitespace-nowrap text-[11px] leading-none text-stone xl:block">
+   346→                          {approx}
+   347→                        </span>
+   348→                      )}
+   349→                    </span>
+   350→                  </button>
+   351→                </li>
+   352→              </Fragment>
+   353→            );
+   354→          })}
+   355→        </ol>
+   356→      </nav>
+   357→
+   358→      {/* MOBILE (< lg) — sticky COMPACT iOS-style segmented strip + caption.
+   359→          Same anatomy the user liked — 7 status cells with a sliding
+   360→          brand-blue thumb (motion layoutId) over a prev/next caption bar —
+   361→          tightened (36px cells, slimmer caption, 40px chevrons) and rounded
+   362→          like an iOS control: overflow-hidden clips every hover/fill to the
+   363→          card's 24px curve, and the sliding thumb carries a 10px radius.
+   364→          The strip is a DIRECT child of the tall view root, NOT a grid
+   365→          item — a sticky element can never travel past its containing
+   366→          block — and it pins under the mobile top bar for the whole
+   367→          scroll. Task 34-b: the workspace scroller below lg is now the
+   368→          shell's PullToRefresh container, whose top edge ALREADY sits
+   369→          under the top bar — so the pin offset is top-0 here (the old
+   370→          top-16 left a 64px gap for content to slide through above the
+   371→          pinned strip). */}
+   372→      <nav ref={mobileNavRef} aria-label="Profile sections" className="dlg-card-plain sticky top-0 z-30 overflow-hidden p-1.5 shadow-e2 lg:hidden">
+   373→        <div className="grid grid-cols-7 gap-0.5">
+   374→          {SECTIONS.map((s, i) => {
+   375→            const isActive = active === s.n;
+   376→            const filled = sectionDone[s.n - 1];
+   377→            return (
+   378→              <button
+   379→                key={s.n}
+   380→                type="button"
+   381→                onClick={() => requestSection(s.n)}
+   382→                aria-label={`Section ${i + 1}: ${s.label}`}
+   383→                aria-current={isActive ? "page" : undefined}
+   384→                className={cn(
+   385→                  "relative isolate flex min-h-9 min-w-0 flex-col items-center justify-center gap-0.5 px-0.5 transition-colors",
+   386→                  isActive ? "text-primary-foreground" : "text-ink hover:bg-fog"
+   387→                )}
+   388→              >
+   389→                {/* Sliding thumb — rendered INSIDE the active cell so inset-0
+   390→                    matches the cell bounds; layoutId slides it between cells
+   391→                    on section change. 12px on the 36px cell — the Jeton
+   392→                    button step. */}
+   393→                {isActive && (
+   394→                  <motion.span
+   395→                    aria-hidden="true"
+   396→                    layoutId="profile-mobile-seg"
+   397→                    className="absolute inset-0 -z-10 rounded-[12px] bg-primary"
+   398→                    transition={{ type: "spring", stiffness: 500, damping: 42 }}
+   399→                  />
+   400→                )}
+   401→                <span
+   402→                  className={cn(
+   403→                    "num text-[10px] font-medium leading-none",
+   404→                    isActive ? "text-primary-foreground/85" : "text-stone"
+   405→                  )}
+   406→                >
+   407→                  {s.num}
+   408→                </span>
+   409→                {filled ? (
+   410→                  <CheckCircle2
+   411→                    className={cn("h-3.5 w-3.5 shrink-0", isActive ? "text-primary-foreground" : "text-[var(--ok)]")}
+   412→                    strokeWidth={2}
+   413→                    aria-hidden="true"
+   414→                  />
+   415→                ) : (
+   416→                  /* Not filled yet — soft ring, same size/weight as the green
+   417→                     check so both states read at a glance (light ring on the
+   418→                     blue active cell, where red would clash). */
+   419→                  <Circle
+   420→                    className={cn("h-3.5 w-3.5 shrink-0", isActive ? "text-primary-foreground/90" : "text-[var(--bad)]")}
+   421→                    strokeWidth={2}
+   422→                    aria-hidden="true"
+   423→                  />
+   424→                )}
+   425→              </button>
+   426→            );
+   427→          })}
+   428→        </div>
+   429→        {/* Caption + sequential stepping — hairline footer bar with quiet
+   430→            chevrons and an aria-live position readout. */}
+   431→        <div className="mt-1 flex items-stretch border-t border-border">
+   432→          <button
+   433→            type="button"
+   434→            onClick={() => activeIdx > 0 && requestSection(SECTIONS[activeIdx - 1].n)}
+   435→            disabled={activeIdx === 0}
+   436→            aria-label="Previous section"
+   437→            className="focus-ring grid w-10 shrink-0 place-items-center text-stone transition-colors hover:bg-fog disabled:opacity-40"
+   438→          >
+   439→            <ChevronLeft className="h-4 w-4" strokeWidth={1.5} aria-hidden="true" />
+   440→          </button>
+   441→          <p
+   442→            aria-live="polite"
+   443→            className="eyebrow min-w-0 flex-1 truncate py-2 text-center"
+   444→          >
+   445→            {`Section ${activeIdx + 1} of ${SECTIONS.length} · ${SECTIONS[activeIdx]?.label ?? ""}`}
+   446→          </p>
+   447→          <button
+   448→            type="button"
+   449→            onClick={() => activeIdx < SECTIONS.length - 1 && requestSection(SECTIONS[activeIdx + 1].n)}
+   450→            disabled={activeIdx === SECTIONS.length - 1}
+   451→            aria-label="Next section"
+   452→            className="focus-ring grid w-10 shrink-0 place-items-center text-stone transition-colors hover:bg-fog disabled:opacity-40"
+   453→          >
+   454→            <ChevronRight className="h-4 w-4" strokeWidth={1.5} aria-hidden="true" />
+   455→          </button>
+   456→        </div>
+   457→      </nav>
+   458→
+   459→      {/* Desktop owns navigation via the sticky band above; this wrapper is
+   460→          a single full-width column for the section content. BOUNDED COLUMN
+   461→          (lg+ only): min-height keeps sparse sections from collapsing the
+   462→          page (footer doesn't jump between swaps); max-height turns tall
+   463→          sections (50 trainings) into an internal scrollbar instead of an
+   464→          unbounded page. Section 01 is NOT scrollable anywhere: it renders
+   465→          at its natural height. Task 34-b — the cap is now lg+ ONLY: below
+   466→          lg the workspace page itself is the PullToRefresh scroller, and a
+   467→          nested scroll pane both traps touch gestures and hijacks the pull
+   468→          (the same trap the documents rows already avoided on phones).
+   469→          overflow-anchor none: Chrome must not re-anchor onto the footer
+   470→          when a short section is swapped for a tall one. */}
+   471→      <div
+   472→        ref={sectionsRef}
+   473→        className={cn(
+   474→          "scroll-thin min-h-[360px] lg:min-h-[420px]",
+   475→          active === 1 ? "overflow-visible" : "lg:max-h-[72dvh] lg:overflow-y-auto"
+   476→        )}
+   477→        style={{ overflowAnchor: "none" }}
+   478→      >
+   479→        {/* SECTION CONTENT — sections swap with a quiet fade/rise (200ms):
+   480→            perceptible placement without choreography. */}
+   481→        <div className="min-w-0">
+   482→          <div key={active} className="animate-in fade-in slide-in-from-bottom-2 duration-200">
+   483→            {active === 1 && (
+   484→              <PersonalInfoSection
+   485→                profile={profile}
+   486→                seed={seed}
+   487→                refreshSession={refresh}
+   488→                onChanged={reloadSilent}
+   489→                onUnsavedChange={handleUnsavedChange}
+   490→              />
+   491→            )}
+   492→            {active === 2 && (
+   493→              <EducationSection
+   494→                items={profile?.educations ?? []}
+   495→                courses={(reference?.courses ?? []).map((c) => c.name)}
+   496→                onChanged={reloadSilent}
+   497→              />
+   498→            )}
+   499→            {active === 3 && <WorkExperienceSection items={profile?.workExperiences ?? []} onChanged={reloadSilent} />}
+   500→            {active === 4 && <TrainingSection items={profile?.trainings ?? []} onChanged={reloadSilent} />}
+   501→            {active === 5 && (
+   502→              <EligibilitySection
+   503→                items={profile?.eligibilities ?? []}
+   504→                referenceNames={(reference?.eligibilities ?? []).map((e) => e.name)}
+   505→                onChanged={reloadSilent}
+   506→              />
+   507→            )}
+   508→            {active === 6 && <AwardsSection items={profile?.awards ?? []} onChanged={reloadSilent} />}
+   509→            {active === 7 && <DocumentsSection docs={docs} onChanged={reloadSilent} />}
+   510→          </div>
+   511→        </div>
+   512→      </div>
+   513→
+   514→      {/* QA 2026-02 — Section progression footer: an explicit Back / Continue
+   515→          affordance so it's immediately obvious how to move between the seven
+   516→          PDS sections (the desktop step band alone wasn't discoverable).
+   517→          handleMobileSectionChange also handles the mobile scroll-recovery. */}
+   518→      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4">
+   519→        {activeIdx > 0 ? (
+   520→          <button
+   521→            type="button"
+   522→            onClick={() => requestSection(SECTIONS[activeIdx - 1].n)}
+   523→            className="dlg-ghost min-h-[44px] px-6 text-sm"
+   524→          >
+   525→            <ChevronLeft className="mr-1.5 inline h-4 w-4" aria-hidden="true" />
+   526→            Back to {SECTIONS[activeIdx - 1]?.label ?? "previous section"}
+   527→          </button>
+   528→        ) : (
+   529→          <span aria-hidden="true" />
+   530→        )}
+   531→
+   532→        {activeIdx < SECTIONS.length - 1 ? (
+   533→          <button
+   534→            type="button"
+   535→            onClick={() => requestSection(SECTIONS[activeIdx + 1].n)}
+   536→            className="dlg-cta min-h-[44px] px-7 text-sm font-medium"
+   537→          >
+   538→            Continue to {SECTIONS[activeIdx + 1]?.label ?? "next section"}
+   539→            <ChevronRight className="ml-1.5 inline h-4 w-4" aria-hidden="true" />
+   540→          </button>
+   541→        ) : (
+   542→          <button
+   543→            type="button"
+   544→            onClick={requestPortalExit}
+   545→            className="dlg-cta min-h-[44px] px-7 text-sm font-medium"
+   546→          >
+   547→            Return to Portal
+   548→            <ChevronRight className="ml-1.5 inline h-4 w-4" aria-hidden="true" />
+   549→          </button>
+   550→        )}
+   551→      </div>
+   552→
+   553→      {/* ── Completion note + Mark Complete (moved from the removed header,
+   554→          Task 22) — a quiet foot row, only while the record is incomplete.
+   555→          The percentage ring itself lives in the Home mini profile. ── */}
+   556→      {!isComplete && (
+   557→        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+   558→          <p className="flex items-start gap-2 text-xs leading-relaxed text-stone sm:max-w-xl">
+   559→            <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+   560→            <span>
+   561→              Completion requires your Personal Information (first name, last name, and email) and at least one entry
+   562→              each in Education and Work Experiences.
+   563→            </span>
+   564→          </p>
+   565→          {canMarkComplete && (
+   566→            <button
+   567→              type="button"
+   568→              onClick={() => setMarkOpen(true)}
+   569→              disabled={marking}
+   570→              className="dlg-cta focus-ring inline-flex min-h-[44px] shrink-0 items-center gap-2 px-5 py-2.5 text-sm disabled:opacity-50"
+   571→            >
+   572→              <ShieldCheck className="h-4 w-4" aria-hidden="true" /> Mark Complete
+   573→            </button>
+   574→          )}
+   575→        </div>
+   576→      )}
+   577→
+   578→      {/* ── OPTIONAL · Auto-fill from PDS — deliberately LAST and collapsed:
+   579→              manual form filling is the primary path (credentials-first per
+   580→              user); the PDS import is a shortcut for applicants who already
+   581→              have a filled CS Form 212. ── */}
+   582→      <section aria-label="Optional PDS auto-fill">
+   583→        <PdsUploadCard docs={docs} onProfileReplaced={onProfileReplaced} onDocsChanged={reloadSilent} />
+   584→      </section>
+   585→
+   586→      {/* Task 40 — unsaved-changes navigation guard: fires when the
+   587→          applicant tries to leave section 01 (another section, or the
+   588→          portal) while its edit session holds unsaved edits. "Discard &
+   589→          leave" continues the ORIGINAL navigation request (pendingNav). */}
+   590→      <AlertDialog
+   591→        open={navOpen}
+   592→        onOpenChange={(o) => {
+   593→          setNavOpen(o);
+   594→          if (!o) setPendingNav(null);
+   595→        }}
+   596→      >
+   597→        <AlertDialogContent className="dlg-card-plain">
+   598→          <AlertDialogHeader>
+   599→            <AlertDialogTitle className="font-display text-2xl text-ink">Leave with unsaved changes?</AlertDialogTitle>
+   600→            <AlertDialogDescription className="text-sm leading-relaxed text-stone">
+   601→              Your edits in Personal Information haven&apos;t been saved yet. Leaving this section now will discard
+   602→              them — your profile keeps its last saved values.
+   603→            </AlertDialogDescription>
+   604→          </AlertDialogHeader>
+   605→          <AlertDialogFooter>
+   606→            <AlertDialogCancel className={cancelBtn}>Keep editing</AlertDialogCancel>
+   607→            <AlertDialogAction
+   608→              onClick={(e) => {
+   609→                e.preventDefault();
+   610→                confirmLeave();
+   611→              }}
+   612→              className={ghostBadBtn}
+   613→            >
+   614→              Discard &amp; leave
+   615→            </AlertDialogAction>
+   616→          </AlertDialogFooter>
+   617→        </AlertDialogContent>
+   618→      </AlertDialog>
+   619→
+   620→      {/* Mark Complete confirm (§7.4) */}
+   621→      <AlertDialog open={markOpen} onOpenChange={setMarkOpen}>
+   622→        <AlertDialogContent className="dlg-card-plain">
+   623→          <AlertDialogHeader>
+   624→            <AlertDialogTitle className="font-display text-2xl text-ink">Mark your profile as complete?</AlertDialogTitle>
+   625→            <AlertDialogDescription className="text-sm leading-relaxed text-stone">
+   626→              Your profile will be ready for application and subject to verification by HR. All statements become part
+   627→              of your civil-service application record.
+   628→            </AlertDialogDescription>
+   629→          </AlertDialogHeader>
+   630→          <AlertDialogFooter>
+   631→            <AlertDialogCancel className={cancelBtn}>Not yet</AlertDialogCancel>
+   632→            <AlertDialogAction
+   633→              onClick={(e) => {
+   634→                e.preventDefault();
+   635→                void markComplete();
+   636→              }}
+   637→              disabled={marking}
+   638→              className="dlg-cta min-h-[44px] px-5 py-2.5 text-sm disabled:opacity-50"
+   639→            >
+   640→              {marking ? "Marking…" : "Mark Complete"}
+   641→            </AlertDialogAction>
+   642→          </AlertDialogFooter>
+   643→        </AlertDialogContent>
+   644→      </AlertDialog>
+   645→    </div>
+   646→  );
+   647→}
+   648→

@@ -1,0 +1,25 @@
+# ============================================================================
+# RMIS 2.0 — INTRANET convenience door (staff on the office LAN)
+# http://⟪VM LAN IP⟫:80 → RMIS on 127.0.0.1:3000
+#
+# Binds the VM's LAN interface only (never a public IP). Same anti-spoofing
+# contract as the public door: OVERWRITE X-Forwarded-For with the socket IP so
+# the app's last-entry classification always sees the true client address.
+# See DEPLOYMENT.md §4.
+# ============================================================================
+
+http://10.20.0.5:80 {
+	reverse_proxy 127.0.0.1:3000 {
+		header_up Host {host}
+		header_up X-Forwarded-For {remote_host}
+		header_up X-Real-IP {remote_host}
+		header_up X-Forwarded-Proto {scheme}
+	}
+
+	# Applicant document uploads (PDS, certificates — up to 10 MB files)
+	request_body {
+		max_size 12MB
+	}
+
+	encode gzip
+}
