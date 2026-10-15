@@ -9,16 +9,18 @@
 // carries the completion note + Mark Complete CTA. PDS auto-fill stays a
 // demoted OPTIONAL collapsible at the very foot (manual form filling is
 // the primary path; auto-fill is a shortcut).
-// Section navigation is breakpoint-split: desktop (lg+) pins a numbered
-// workflow band (capsule done/current/ahead chips joined by hairline
-// connectors, two-line labels with time estimates); phones get a compact
-// iOS-style strip — a sticky rounded white card holding the 7 status cells
-// (sliding brand-blue thumb) over a prev/next caption bar. Sections render
-// as white dlg-card-plain panels in one full-width column.
+// Section navigation is breakpoint-split (QA 2026-02: the desktop stepper
+// left the page-top band for a LEFT-HAND RAIL — desktop is a two-column
+// workspace, vertical stepper LEFT / form column RIGHT): lg+ pins a sticky
+// white dlg-card-plain rail with the numbered workflow stacked vertically
+// (capsule done/current/ahead chips joined by hairline connectors, two-line
+// labels with time estimates); phones keep the compact iOS-style strip — a
+// sticky rounded white card holding the 7 status cells (sliding brand-blue
+// thumb) over a prev/next caption bar.
 // Data logic unchanged: parallel loads, silent reloads, session refresh.
 // ============================================================================
 
-import { Fragment, useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { toast } from "@/lib/toast";
 import {
@@ -161,7 +163,7 @@ export default function ProfileView() {
   // ── Mobile stepper: switch section AND bring the rail back into view —
   // tapping "04" while stranded deep inside section 01's long form must not
   // leave the viewport mid-scroll in the old section. Desktop (lg+) skips
-  // this: the nav band is sticky above the content, no jump needed.
+  // this: the nav rail is sticky beside the content, no jump needed.
   const mobileNavRef = useRef<HTMLElement>(null);
 
   function changeSection(n: number) {
@@ -267,23 +269,32 @@ export default function ProfileView() {
   if (loading) {
     return (
       <div className="space-y-6">
-        {/* Section nav skeleton — desktop band / mobile strip */}
-        <div className="glass hidden border-b border-border px-8 py-4 lg:block">
-          <div className="flex gap-6 overflow-hidden">
-            {SECTIONS.map((s) => (
-              <div key={s.n} className="skel h-9 w-24 shrink-0" />
-            ))}
+        {/* Section nav skeleton — same two-column geometry as the loaded
+            view: vertical rail LEFT (lg+), iOS strip + form rows RIGHT. */}
+        <div className="lg:grid lg:grid-cols-[260px_minmax(0,1fr)] lg:items-start lg:gap-10">
+          <div className="dlg-card-plain hidden p-4 lg:block" aria-hidden="true">
+            <div className="flex flex-col">
+              {SECTIONS.map((s, i) => (
+                <div key={s.n} className={cn("flex gap-3", i < SECTIONS.length - 1 && "pb-5")}>
+                  <div className="skel h-8 w-8 shrink-0 rounded-full" />
+                  <div className="flex-1 space-y-1.5 pt-1">
+                    <div className="skel h-3.5 w-24" />
+                    <div className="skel h-2.5 w-16" />
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
-        <div className="dlg-card-plain p-1.5 lg:hidden">
-          <div className="grid grid-cols-7 gap-0.5">
-            {SECTIONS.map((s) => (
-              <div key={s.n} className="skel h-9 w-full" />
-            ))}
+          <div className="min-w-0 space-y-6">
+            <div className="dlg-card-plain p-1.5 lg:hidden">
+              <div className="grid grid-cols-7 gap-0.5">
+                {SECTIONS.map((s) => (
+                  <div key={s.n} className="skel h-9 w-full" />
+                ))}
+              </div>
+            </div>
+            <SkeletonRows rows={4} rowClassName="h-20" />
           </div>
-        </div>
-        <div>
-          <SkeletonRows rows={4} rowClassName="h-20" />
         </div>
       </div>
     );
@@ -309,68 +320,6 @@ export default function ProfileView() {
           page) — this visually-hidden h1 keeps the document outline valid for
           screen readers and the ⌘K / breadcrumbs context. */}
       <h1 className="sr-only">My Profile</h1>
-      {/* ── D. Section navigation (lg+) — sticky numbered workflow band.
-              Desktop content column has no sticky header above it, so the
-              band pins to the very top of the viewport. NOT scrollable by
-              design: the row always fits its container. Below xl the items
-              compact (28px chips · 11.5px labels · "Approx" line hidden);
-              from xl up the full register renders (32px chips · 13.5px
-              labels · "Approx N Min" second line). Hairline connectors are
-              flex-1 so they absorb any leftover width. ── */}
-      <nav
-        aria-label="Profile section steps"
-        className="glass sticky top-0 z-20 -mx-4 hidden border-b border-border px-4 py-3 sm:-mx-6 sm:px-6 lg:block lg:-mx-8 lg:px-8"
-      >
-        <ol className="flex items-center">
-          {SECTIONS.map((s, i) => {
-            const isActive = active === s.n;
-            const done = sectionDone[s.n - 1];
-            const reached = done || isActive;
-            const approx = s.minutes != null ? `Approx ${s.minutes} Min` : null;
-            return (
-              <Fragment key={s.n}>
-                {i > 0 && <li aria-hidden="true" className="h-px min-w-1 flex-1 bg-divider xl:min-w-4" />}
-                <li className="shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => requestSection(s.n)}
-                    aria-current={isActive ? "step" : undefined}
-                    aria-label={`Section ${i + 1}: ${s.label}`}
-                    className="focus-ring group flex items-center gap-2 py-1 pl-0.5 pr-1 transition-colors xl:gap-2.5"
-                  >
-                    <span
-                      aria-hidden="true"
-                      className={cn(
-                        "grid h-7 w-7 shrink-0 place-items-center rounded-full border text-[11px] font-medium tabular-nums transition-colors duration-200 xl:h-8 xl:w-8 xl:text-[12px]",
-                        reached
-                          ? "border-transparent bg-primary text-primary-foreground"
-                          : "border-divider bg-white text-stone group-hover:border-metric-blue/40 group-hover:text-ink"
-                      )}
-                    >
-                      {done ? <Check className="h-3.5 w-3.5" strokeWidth={3} /> : s.num}
-                    </span>
-                    <span className="flex min-w-0 flex-col leading-tight">
-                      <span
-                        className={cn(
-                          "whitespace-nowrap text-[11px] font-medium transition-colors xl:text-[13px]",
-                          reached ? "text-ink" : "text-stone group-hover:text-ink"
-                        )}
-                      >
-                        {s.short}
-                      </span>
-                      {approx && (
-                        <span className="mt-0.5 hidden whitespace-nowrap text-[11px] leading-none text-stone xl:block">
-                          {approx}
-                        </span>
-                      )}
-                    </span>
-                  </button>
-                </li>
-              </Fragment>
-            );
-          })}
-        </ol>
-      </nav>
 
       {/* MOBILE (< lg) — sticky COMPACT iOS-style segmented strip + caption.
           Same anatomy the user liked — 7 status cells with a sliding
@@ -473,65 +422,143 @@ export default function ProfileView() {
         </div>
       </nav>
 
-      {/* Desktop owns navigation via the sticky band above; this wrapper is
-          a single full-width column for the section content. BOUNDED COLUMN
-          (lg+ only): min-height keeps sparse sections from collapsing the
-          page (footer doesn't jump between swaps); max-height turns tall
-          sections (50 trainings) into an internal scrollbar instead of an
-          unbounded page. Section 01 is NOT scrollable anywhere: it renders
-          at its natural height. Task 34-b — the cap is now lg+ ONLY: below
-          lg the workspace page itself is the PullToRefresh scroller, and a
-          nested scroll pane both traps touch gestures and hijacks the pull
-          (the same trap the documents rows already avoided on phones).
-          overflow-anchor none: Chrome must not re-anchor onto the footer
-          when a short section is swapped for a tall one. */}
-      <div
-        ref={sectionsRef}
-        className={cn(
-          "scroll-thin min-h-[360px] lg:min-h-[420px]",
-          active === 1 ? "overflow-visible" : "lg:max-h-[72dvh] lg:overflow-y-auto"
-        )}
-        style={{ overflowAnchor: "none" }}
-      >
-        {/* SECTION CONTENT — sections swap with a quiet fade/rise (200ms):
-            perceptible placement without choreography. */}
-        <div className="min-w-0">
-          <div key={active} className="animate-in fade-in slide-in-from-bottom-2 duration-200">
-            {active === 1 && (
-              <PersonalInfoSection
-                profile={profile}
-                seed={seed}
-                refreshSession={refresh}
-                onChanged={reloadSilent}
-                onUnsavedChange={handleUnsavedChange}
-              />
-            )}
-            {active === 2 && (
-              <EducationSection
-                items={profile?.educations ?? []}
-                courses={(reference?.courses ?? []).map((c) => c.name)}
-                onChanged={reloadSilent}
-              />
-            )}
-            {active === 3 && <WorkExperienceSection items={profile?.workExperiences ?? []} onChanged={reloadSilent} />}
-            {active === 4 && <TrainingSection items={profile?.trainings ?? []} onChanged={reloadSilent} />}
-            {active === 5 && (
-              <EligibilitySection
-                items={profile?.eligibilities ?? []}
-                referenceNames={(reference?.eligibilities ?? []).map((e) => e.name)}
-                onChanged={reloadSilent}
-              />
-            )}
-            {active === 6 && <AwardsSection items={profile?.awards ?? []} onChanged={reloadSilent} />}
-            {active === 7 && <DocumentsSection docs={docs} onChanged={reloadSilent} />}
+      {/* ── D. Desktop two-column workspace (QA 2026-02): the numbered
+          workflow moved off the page-top band into a sticky LEFT-HAND RAIL —
+          vertical stepper LEFT, form column RIGHT. Phones keep the iOS strip
+          above (it stays OUTSIDE this grid, a direct child of the view root,
+          preserving its sticky range across the whole form scroll). ── */}
+      <div className="lg:grid lg:grid-cols-[260px_minmax(0,1fr)] lg:items-start lg:gap-10">
+        {/* LEFT — sticky vertical stepper rail (lg+). One full-width button
+            per row (capsule chip + two-line label with time estimate) so
+            chip, label and caption share a single click/focus/hover target;
+            an absolute hairline joins each chip to the next. Sticky top-0:
+            section 01 renders at its natural (very tall) height and the rail
+            stays in view for the whole scroll; items-start lets the rail hug
+            its content so sticky has the full row to travel. */}
+        <nav
+          aria-label="Profile section steps"
+          className="hidden lg:sticky lg:top-0 lg:z-20 lg:block"
+        >
+          <div className="dlg-card-plain p-4">
+            <ol className="flex flex-col">
+              {SECTIONS.map((s, i) => {
+                const isActive = active === s.n;
+                const done = sectionDone[s.n - 1];
+                const reached = done || isActive;
+                const approx = s.minutes != null ? `Approx ${s.minutes} Min` : null;
+                const isLast = i === SECTIONS.length - 1;
+                return (
+                  <li key={s.n} className="relative">
+                    <button
+                      type="button"
+                      onClick={() => requestSection(s.n)}
+                      aria-current={isActive ? "step" : undefined}
+                      aria-label={`Section ${i + 1}: ${s.label}`}
+                      className={cn(
+                        "focus-ring group flex w-full gap-3 rounded-xl pr-2 text-left transition-colors hover:bg-fog/60",
+                        isActive && "bg-fog",
+                        isLast ? "pb-1" : "pb-5"
+                      )}
+                    >
+                      <span aria-hidden="true" className="flex shrink-0 flex-col items-center">
+                        <span
+                          className={cn(
+                            "grid h-8 w-8 shrink-0 place-items-center rounded-full border text-[12px] font-medium tabular-nums transition-colors duration-200",
+                            reached
+                              ? "border-transparent bg-primary text-primary-foreground"
+                              : "border-divider bg-white text-stone group-hover:border-metric-blue/40 group-hover:text-ink"
+                          )}
+                        >
+                          {done ? <Check className="h-3.5 w-3.5" strokeWidth={3} /> : s.num}
+                        </span>
+                      </span>
+                      <span className="flex min-w-0 flex-col pt-1">
+                        <span
+                          className={cn(
+                            "whitespace-nowrap text-[13px] font-medium leading-tight transition-colors",
+                            reached ? "text-ink" : "text-stone group-hover:text-ink"
+                          )}
+                        >
+                          {s.short}
+                        </span>
+                        {approx && (
+                          <span className="mt-1 whitespace-nowrap text-[11px] leading-none text-stone">
+                            {approx}
+                          </span>
+                        )}
+                      </span>
+                    </button>
+                    {!isLast && (
+                      <span aria-hidden="true" className="absolute bottom-0 left-4 top-9 w-px bg-divider" />
+                    )}
+                  </li>
+                );
+              })}
+            </ol>
+          </div>
+        </nav>
+
+        {/* Desktop owns navigation via the sticky rail beside this column;
+            this wrapper is the form surface. BOUNDED COLUMN
+            (lg+ only): min-height keeps sparse sections from collapsing the
+            page (footer doesn't jump between swaps); max-height turns tall
+            sections (50 trainings) into an internal scrollbar instead of an
+            unbounded page. Section 01 is NOT scrollable anywhere: it renders
+            at its natural height. Task 34-b — the cap is now lg+ ONLY: below
+            lg the workspace page itself is the PullToRefresh scroller, and a
+            nested scroll pane both traps touch gestures and hijacks the pull
+            (the same trap the documents rows already avoided on phones).
+            overflow-anchor none: Chrome must not re-anchor onto the footer
+            when a short section is swapped for a tall one. */}
+        <div
+          ref={sectionsRef}
+          className={cn(
+            "scroll-thin min-h-[360px] min-w-0 lg:min-h-[420px]",
+            active === 1 ? "overflow-visible" : "lg:max-h-[72dvh] lg:overflow-y-auto"
+          )}
+          style={{ overflowAnchor: "none" }}
+        >
+          {/* SECTION CONTENT — sections swap with a quiet fade/rise (200ms):
+              perceptible placement without choreography. */}
+          <div className="min-w-0">
+            <div key={active} className="animate-in fade-in slide-in-from-bottom-2 duration-200">
+              {active === 1 && (
+                <PersonalInfoSection
+                  profile={profile}
+                  seed={seed}
+                  refreshSession={refresh}
+                  onChanged={reloadSilent}
+                  onUnsavedChange={handleUnsavedChange}
+                />
+              )}
+              {active === 2 && (
+                <EducationSection
+                  items={profile?.educations ?? []}
+                  courses={(reference?.courses ?? []).map((c) => c.name)}
+                  onChanged={reloadSilent}
+                />
+              )}
+              {active === 3 && <WorkExperienceSection items={profile?.workExperiences ?? []} onChanged={reloadSilent} />}
+              {active === 4 && <TrainingSection items={profile?.trainings ?? []} onChanged={reloadSilent} />}
+              {active === 5 && (
+                <EligibilitySection
+                  items={profile?.eligibilities ?? []}
+                  referenceNames={(reference?.eligibilities ?? []).map((e) => e.name)}
+                  onChanged={reloadSilent}
+                />
+              )}
+              {active === 6 && <AwardsSection items={profile?.awards ?? []} onChanged={reloadSilent} />}
+              {active === 7 && <DocumentsSection docs={docs} onChanged={reloadSilent} />}
+            </div>
           </div>
         </div>
       </div>
 
       {/* QA 2026-02 — Section progression footer: an explicit Back / Continue
           affordance so it's immediately obvious how to move between the seven
-          PDS sections (the desktop step band alone wasn't discoverable).
-          handleMobileSectionChange also handles the mobile scroll-recovery. */}
+          PDS sections (the rail alone wasn't discoverable). It spans the page
+          under both columns; changeSection brings the mobile strip back into
+          view on switch. */}
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4">
         {activeIdx > 0 ? (
           <button
