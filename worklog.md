@@ -765,3 +765,21 @@ Work Log:
 Stage Summary:
 - Commit (Task 10-d); working tree clean.
 - The create/edit form's controls are now crisply white against the cloud panels, and the Salary Step question is resolved: field removed from the form, data model untouched, boards degrade gracefully to the SG grade alone.
+
+---
+Task ID: 10-e
+Agent: Z.ai Code (main agent)
+Task: Jobs table statuses don't match the system's statuses and badges — unify.
+
+Work Log:
+- Diagnosis: the staff Jobs table flattened job status to binary Open (green ✓) / Closed (gray ○) via JobStatusPill, while every other surface (vacant-positions board, public landing, job cards) speaks the deadline-aware ladder — the board even showed Closed as a RED raw CSS pill. Same job, two status stories.
+- Canonical resolver: jobStatusView() in lib/job-meta.ts — labels from deadlineState (the system vocabulary), variants from the badge tints: Closed (unpublished or deadline passed) → bad/red ✕; Closing today / Closing in N days (≤7d) → warn/amber ⚠; N days left (≤30d) → neutral/gray ○; Open (>30d) → ok/green ✓; Open until filled → neutral. Returns family ("open"/"closed") which backs the table's existing Open/Closed status filter (amber closing-soon rows stay in the Open family).
+- One pill everywhere: recruitment's JobStatusPill now renders jobStatusView through the official StatusPill/AnimatedBadge; jobs-view's hand-rolled CSS DeadlinePill deleted — the board cards + QuickView hero import the same JobStatusPill; the job workspace header inherits automatically. Dead variantForJobStatus removed from status-ui.
+- Column fix: the widest label ("Closing in 3 days") truncated in the old 130px/108px status columns — desktop widened to 150px, mobile rebalanced 120/140/98 (same 358px budget) so badges render unclipped on both.
+- Browser-verified end-to-end: created QA postings to exercise amber (deadline +3d) and green (>30d) states; staff table shows ✓Open / ⚠Closing in 3 days / ✕Closed / ○N days left; vacant-positions board renders IDENTICAL badges (board's red Closed upgraded from CSS pill to the official badge); workspace header inherits the ladder; filter Open → 5 rows incl. the amber one, Closed → only the overdue row; mobile 390×844 badges fit fully. QA postings deleted after.
+- Screenshots: .verify/10e-jobs-table-ladder.png, 10e-vacant-board-badges.png, 10e-filter-open-family.png, 10e-workspace-header-badge.png, 10e-mobile-table-badges.png.
+- bun run lint clean; dev.log clean.
+
+Stage Summary:
+- Commit (Task 10-e); working tree clean.
+- The Jobs table now speaks the same status ladder with the same official badges as the rest of the system, driven by one resolver (jobStatusView) so table, board and workspace header can never drift again.
