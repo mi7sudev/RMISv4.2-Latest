@@ -250,17 +250,25 @@ const CARDS_PREVIEW = 4;
  * collapses again). Empty columns show a quiet dashed inset. On phones the
  * column is a snap-scroll lane card (min(320px, 85vw)); from md up the grid
  * stretches all columns to equal height.
+ * `action` (Task 11 — the job workspace's "Send interview invitations" pill
+ * inside the Shortlisted column) is an optional full-width slot between the
+ * header and the card stack, so column-scoped controls live INSIDE the kanban
+ * rather than floating above the board. Other boards pass nothing and render
+ * exactly as before.
  */
 export function KanbanColumn({
   label,
   stage,
   count,
+  action,
   children,
 }: {
   label: string;
   /** Stage key drives the dot color; use "Neutral" for non-pipeline columns. */
   stage: StageKey | "Neutral";
   count: number;
+  /** Optional column-scoped control (full-width pill under the header). */
+  action?: React.ReactNode;
   children: React.ReactNode;
 }) {
   const [expanded, setExpanded] = React.useState(false);
@@ -284,6 +292,8 @@ export function KanbanColumn({
             {count}
           </span>
         </div>
+        {/* Column-scoped action (optional) — full-width pill under the header */}
+        {action && <div className="pb-2.5">{action}</div>}
         {/* Body — floating white cards on the pale panel */}
         <div className="flex flex-1 flex-col gap-2">
           {cards.length === 0 ? (

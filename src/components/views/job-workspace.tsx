@@ -6,8 +6,9 @@
 // sticky summary + mini pipeline), Pipeline kanban, Candidates — all from the
 // evaluator queue filtered to this job.
 // Task 11 (user direction) — the cross-job "Send interview invitations" bulk
-// send moved off the Review Queue: the Pipeline tab now carries the per-posting
-// composer, scoped to THIS job's shortlisted cohort only.
+// send moved off the Review Queue: the button lives INSIDE the pipeline
+// kanban of a specific job — a column-scoped pill in the Shortlisted column
+// — so the cohort is visibly and structurally scoped to THIS posting only.
 // ============================================================================
 
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -276,52 +277,58 @@ export default function JobWorkspace() {
         </TabsContent>
 
         {/* Pipeline — reference board: bordered columns with dot + label + count headers.
-            Task 11 — the tab's toolbar carries the per-posting invitation send
-            (moved off the Review Queue): fans out to THIS job's shortlist only. */}
+            Task 11 — the invitation send lives INSIDE the kanban: the
+            Shortlisted column carries the per-posting composer pill (user
+            direction), fanning out to THIS job's shortlist only. */}
         <TabsContent value="pipeline" className="mt-4">
-          <div className="space-y-4">
-            {shortlistedIds.length > 0 && (
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  className="focus-ring inline-flex min-h-[36px] items-center gap-2 rounded-full border border-metric-blue/40 bg-metric-blue/10 px-4 text-sm font-medium text-ink transition-colors hover:bg-metric-blue/20"
-                  onClick={() => setBulkInviteOpen(true)}
+          <div className="flex snap-x snap-proximity items-stretch gap-4 overflow-x-auto scroll-thin pb-2 md:grid md:grid-cols-2 xl:grid-cols-4 md:overflow-visible md:pb-0">
+            {PIPELINE_STAGES.map((stage) => {
+              const rows = pipeline[stage];
+              return (
+                <KanbanColumn
+                  key={stage}
+                  label={stage}
+                  stage={stage}
+                  count={rows.length}
+                  action={
+                    stage === "Shortlisted" && shortlistedIds.length > 0 ? (
+                      <button
+                        type="button"
+                        className="focus-ring flex w-full items-center justify-center gap-1.5 rounded-xl border border-metric-blue/40 bg-white px-3 py-2 text-xs font-medium text-ink transition-colors hover:bg-metric-blue/10"
+                        aria-label={`Send interview invitations to all ${shortlistedIds.length} shortlisted applicants of this job`}
+                        title={`Email every shortlisted applicant of this posting (${shortlistedIds.length})`}
+                        onClick={() => setBulkInviteOpen(true)}
+                      >
+                        <Video className="h-3.5 w-3.5 shrink-0 text-metric-blue" aria-hidden />
+                        <span className="truncate">Send interview invitations ({shortlistedIds.length})</span>
+                      </button>
+                    ) : undefined
+                  }
                 >
-                  <Video className="h-4 w-4 text-metric-blue" aria-hidden />
-                  Send interview invitations ({shortlistedIds.length})
-                </button>
-              </div>
-            )}
-            <div className="flex snap-x snap-proximity items-stretch gap-4 overflow-x-auto scroll-thin pb-2 md:grid md:grid-cols-2 xl:grid-cols-4 md:overflow-visible md:pb-0">
-              {PIPELINE_STAGES.map((stage) => {
-                const rows = pipeline[stage];
-                return (
-                  <KanbanColumn key={stage} label={stage} stage={stage} count={rows.length}>
-                    {rows.map((app) => {
-                        const position = app.job.position?.positionTitle || app.job.title;
-                        const name = fullName(app.applicant);
-                        return (
-                          <button
-                            key={app.id}
-                            type="button"
-                            className={KANBAN_CARD + " focus-ring w-full cursor-pointer p-4 text-left"}
-                            onClick={() => navigate("evaluator-review", { id: String(app.id) })}
-                            aria-label={`Review application from ${name}`}
-                          >
-                            <KanbanCardBody
-                              name={name}
-                              position={humanize(position)}
-                              appliedLabel={`Applied ${appliedAgo(app.dateApplied)}`}
-                              match={{ metCount: app.match?.metCount ?? 0, requiredCount: app.match?.requiredCount ?? 0 }}
-                              tags={app.tags ?? []}
-                            />
-                          </button>
-                        );
-                      })}
-                  </KanbanColumn>
-                );
-              })}
-            </div>
+                  {rows.map((app) => {
+                      const position = app.job.position?.positionTitle || app.job.title;
+                      const name = fullName(app.applicant);
+                      return (
+                        <button
+                          key={app.id}
+                          type="button"
+                          className={KANBAN_CARD + " focus-ring w-full cursor-pointer p-4 text-left"}
+                          onClick={() => navigate("evaluator-review", { id: String(app.id) })}
+                          aria-label={`Review application from ${name}`}
+                        >
+                          <KanbanCardBody
+                            name={name}
+                            position={humanize(position)}
+                            appliedLabel={`Applied ${appliedAgo(app.dateApplied)}`}
+                            match={{ metCount: app.match?.metCount ?? 0, requiredCount: app.match?.requiredCount ?? 0 }}
+                            tags={app.tags ?? []}
+                          />
+                        </button>
+                      );
+                    })}
+                </KanbanColumn>
+              );
+            })}
           </div>
         </TabsContent>
 
