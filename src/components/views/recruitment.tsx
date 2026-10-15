@@ -16,7 +16,9 @@
 // Task 10 — the dialog carries the posting's COMPLETE front-page identity:
 // Place of Assignment (the public board's location line) and Salary Step
 // (the SG grade/step pair) join the vitals write-through. The modal itself
-// grows into an enterprise form frame: a wider max-w-5xl card with a sticky
+// grows into an enterprise form frame: a wider card — max-w-5xl (1024px) on
+// laptops, scaling to 80vw capped at 1440px from the 2xl breakpoint so wide
+// desktop monitors get a proportionally larger dialog — with a sticky
 // header (eyebrow + title + guidance) and sticky footer (contextual hint +
 // actions) framing a scrollable body, and the panels in a two-column grid at
 // lg — Position Details beside Compensation & Vacancy — so the whole posting
@@ -436,13 +438,17 @@ export function JobFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      {/* Task 10 — enterprise form frame: a wider max-w-5xl card structured as
+      {/* Task 10 — enterprise form frame: a wider card structured as
           a pinned header (eyebrow + title + guidance) over a scrollable body
           over a pinned footer (contextual hint + actions). Header and footer
           never scroll away, so guidance and the save action stay on screen
-          for the whole fill — the panels read in a two-column grid at lg. */}
+          for the whole fill — the panels read in a two-column grid at lg.
+          Task 10-b — width tiers with the screen: 1024px from sm (laptop
+          sweet spot), then 80vw capped at 1440px from 2xl so wide desktop
+          monitors get a proportionally larger frame instead of a fixed card
+          floating in space. */}
       <DialogContent
-        className="flex max-h-[92dvh] flex-col gap-0 overflow-hidden rounded-3xl border border-border bg-white p-0 sm:max-w-5xl"
+        className="flex max-h-[92dvh] flex-col gap-0 overflow-hidden rounded-3xl border border-border bg-white p-0 sm:max-w-5xl 2xl:w-[80vw] 2xl:max-w-[90rem]"
         ariaLabel={editing ? "Edit job posting" : "Create job posting"}
       >
         <DialogHeader className="shrink-0 gap-1.5 border-b border-border/70 bg-white px-5 pb-4 pr-14 pt-5 text-left sm:px-6 sm:pt-6">
