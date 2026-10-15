@@ -990,8 +990,11 @@ export function NoticeFormDialog({
     >
       {/* Task 32 — the dialog carries the official SignUpForm card anatomy:
           hairline-bordered white card, auth header typography, gap-5 flow
-          of icon-led fields with reserved error lines. */}
-      <DialogContent className={cn(dialogScroll, "rounded-3xl border border-border bg-white", "sm:max-w-md")} ariaLabel={kind === "interview" ? "Send interview invitation" : "Send skills-exam notice"}>
+          of icon-led fields with reserved error lines. Task 12 — the panel
+          widens responsively on desktop (sm 576 → lg 672 → xl 768 → 2xl 896px)
+          so wide monitors get a roomier invitation composer; mobile keeps the
+          core BEUI max-w-[26rem] panel untouched. */}
+      <DialogContent className={cn(dialogScroll, "rounded-3xl border border-border bg-white", "sm:max-w-xl lg:max-w-2xl xl:max-w-3xl 2xl:max-w-4xl")} ariaLabel={kind === "interview" ? "Send interview invitation" : "Send skills-exam notice"}>
         <DialogHeader>
           <DialogTitle className="text-xl font-medium text-foreground">
             {kind === "interview" ? "Send interview invitation" : "Send skills-exam notice"}
