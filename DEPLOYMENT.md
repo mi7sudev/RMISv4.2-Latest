@@ -120,8 +120,9 @@ Data (`db/`, `upload/`) lives outside the build output — updates never touch i
 - [x] Deploy + health green (pm2 `rmis`, saved)
 - [x] Two-tier matrix: `403` external / `200` intranet
 - [x] Middleware relay reachable at `10.10.120.43:3232`
-- [ ] Real accounts: sign in as `testadmin` → Users → **deactivate** `testevaluator`, `testapplicant` → create real ADMIN (12+ char password) → sign in as real admin → **deactivate** `testadmin` (deactivate, never delete — keeps profiles/audit rows referentially intact)
-- [ ] Settings ▸ Email Notices → **Send test email** (as the real admin)
+- [x] Real accounts baked in (2026-10-15 credential rotation): the staff accounts ARE the production identities — **`admin@mirdc.dost.gov.ph`** (System Administrator, ADMIN) and **`evaluator@mirdc.dost.gov.ph`** (HR Evaluator, EVALUATOR). Sign-in accepts the email or the short username (`admin` / `evaluator`); passwords are the office-issued ones from the handover chat / secrets store (never committed to this repo). They ship in the deployed database — no account-creation step on go-live day.
+- [ ] Deactivate `testapplicant` (the only remaining test login) after go-live — §9
+- [ ] Settings ▸ Email Notices → **Send test email** (as `admin@mirdc.dost.gov.ph`)
 - [ ] `npm run backup` smoke test, then nightly cron: `30 2 * * * cd /home/rmis-mirdc/Desktop/RMISv4.1 && npm run backup >> /home/rmis-mirdc/rmis-backup.log 2>&1`
 - [ ] Copy `.env` to the secrets store
 - [ ] Domain door DNS + edge forward (§0.3)
@@ -440,25 +441,30 @@ verified in the audit table (`LOGIN_BLOCKED_EXTERNAL`, ip `8.8.8.8`).
   ```
 
   Also keep `.env` backed up (secrets store, not the repo).
-- **Test accounts** — the dev/test logins (`testadmin`, `testevaluator`,
-  `testapplicant` — password `password123`) must NOT survive go-live (§9).
+- **Staff accounts (2026-10-15 rotation)** — the dev-era logins `testadmin` /
+  `testevaluator` were rotated in-place into the production identities
+  `admin@mirdc.dost.gov.ph` / `evaluator@mirdc.dost.gov.ph` (same rows, so
+  profiles/audit references stay intact). `testapplicant` remains a test login
+  and must NOT survive go-live (§9).
 
 ---
 
 ## 9. Go-live checklist (server-side, one-time)
 
-1. **Deactivate the test logins** (any `test*` account ships with weak passwords):
+1. **Deactivate the one remaining test login** (`testapplicant` ships with a
+   weak password):
 
    ```bash
-   bun scripts/create-admin.ts --deactivate testadmin
-   bun scripts/create-admin.ts --deactivate testevaluator
    bun scripts/create-admin.ts --deactivate testapplicant
    ```
 
-2. **Create the real administrator / evaluators** (refuses weak passwords):
+2. **Real administrator / evaluator are already in the database** — the
+   2026-10-15 rotation baked the production staff accounts in (see §0.6):
+   `admin@mirdc.dost.gov.ph` (ADMIN) and `evaluator@mirdc.dost.gov.ph`
+   (EVALUATOR). Nothing to create on go-live day. To add MORE staff accounts
+   later (refuses weak passwords):
 
    ```bash
-   bun scripts/create-admin.ts --email ⟪real.admin@mirdc.gov.ph⟫ --password '⟪S3cure!Passw0rd⟫' --name "⟪Name⟫"
    bun scripts/create-admin.ts --email ⟪hr.staff@mirdc.gov.ph⟫ --password '⟪S3cure!Passw0rd⟫' --name "⟪Name⟫" --role evaluator
    ```
 

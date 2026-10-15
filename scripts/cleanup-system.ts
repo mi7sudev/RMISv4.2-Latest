@@ -1,11 +1,15 @@
 // ============================================================================
 // RMIS — Sandbox cleanup (Task 15): wipe ALL demo/test content and keep ONLY
-// the three staff/applicant test accounts (testadmin / testevaluator /
-// testapplicant, password123). Removes: job postings + positions,
-// applications, notifications, documents (rows AND files on disk), profile
-// section entries, email/SMS/audit logs, contact requests, email OTP rows,
-// and every User account beyond the three kept ones. Reference vocabularies
-// (EligibilityRef / Course / PlaceOfAssignment) are SYSTEM config and stay.
+// the three staff/applicant baseline accounts (admin / evaluator /
+// testapplicant). Since the 2026-10-15 production-credential rotation the
+// staff accounts carry the REAL office identities (admin@mirdc.dost.gov.ph /
+// evaluator@mirdc.dost.gov.ph) — they are the accounts production ships with,
+// so a sandbox reset MUST keep them (deleting them would lock staff out).
+// Removes: job postings + positions, applications, notifications, documents
+// (rows AND files on disk), profile section entries, email/SMS/audit logs,
+// contact requests, email OTP rows, and every User account beyond the three
+// kept ones. Reference vocabularies (EligibilityRef / Course /
+// PlaceOfAssignment) are SYSTEM config and stay.
 // testapplicant is left with an empty Applicant shell — the same state a
 // fresh registration produces — so the account signs in cleanly.
 // Run: ALLOW_SANDBOX_RESET=1 bun scripts/cleanup-system.ts
@@ -30,7 +34,7 @@ if (process.env.NODE_ENV === "production") {
 }
 
 const db = new PrismaClient();
-const KEEP_USERNAMES = ["testadmin", "testevaluator", "testapplicant"];
+const KEEP_USERNAMES = ["admin", "evaluator", "testapplicant"];
 
 async function main() {
   console.log("• wiping content tables…");
@@ -57,7 +61,7 @@ async function main() {
     console.log(`  - ${label}: ${res.count} deleted`);
   }
 
-  console.log("• pruning users (keeping testadmin / testevaluator / testapplicant)…");
+  console.log("• pruning users (keeping admin / evaluator / testapplicant)…");
   const users = await db.user.deleteMany({
     where: { username: { notIn: KEEP_USERNAMES } },
   });
