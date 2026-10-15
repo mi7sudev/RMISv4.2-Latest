@@ -1,0 +1,1014 @@
+     1→// ============================================================================
+     2→// RMIS — Seed script (spec §15): RBAC-free normalized schema; demo accounts,
+     3→// reference data, positions + postings, sample applicants + applications
+     4→// across pipeline stages. Run: npx tsx prisma/seed.ts (or bun prisma/seed.ts)
+     5→// ============================================================================
+     6→
+     7→import { PrismaClient } from "@prisma/client";
+     8→import bcrypt from "bcryptjs";
+     9→import crypto from "crypto";
+    10→import fs from "fs";
+    11→import path from "path";
+    12→// MOM-authentic notification templates — reused so every seeded email/SMS row
+    13→// carries the EXACT wording the live system would have produced.
+    14→import {
+    15→  emailApplicationReceived,
+    16→  emailUnderReview,
+    17→  emailShortlisted,
+    18→  emailRegretLetter,
+    19→  emailInterviewInvitation,
+    20→  emailSkillsExam,
+    21→  smsApplicationReceived,
+    22→  smsNotice,
+    23→  smsStatusChanged,
+    24→  type NoticeDetails,
+    25→} from "@/lib/notify";
+    26→
+    27→const db = new PrismaClient();
+    28→
+    29→async function main() {
+    30→  console.log("Seeding RMIS…");
+    31→
+    32→  // ── Reference data ────────────────────────────────────────────────────────
+    33→  const eligibilityNames = [
+    34→    "None Required",
+    35→    "Career Service Sub-Professional (First Level)",
+    36→    "Career Service Professional (Second Level)",
+    37→    "Honor Graduate (PD 907)",
+    38→    "Bar/Board (RA 1080)",
+    39→  ];
+    40→  for (let i = 0; i < eligibilityNames.length; i++) {
+    41→    await db.eligibilityRef.upsert({
+    42→      where: { name: eligibilityNames[i] },
+    43→      update: { index: i },
+    44→      create: { name: eligibilityNames[i], index: i },
+    45→    });
+    46→  }
+    47→
+    48→  const courses: [string, string, string, string][] = [
+    49→    ["BSBA", "BSBA", "Business", "College"],
+    50→    ["BS Accountancy", "BSA", "Business", "College"],
+    51→    ["BS Mechanical Engineering", "BSME", "Engineering", "College"],
+    52→    ["BS Electrical Engineering", "BSEE", "Engineering", "College"],
+    53→    ["BS Civil Engineering", "BSCE", "Engineering", "College"],
+    54→    ["BS Industrial Engineering", "BSIE", "Engineering", "College"],
+    55→    ["BS Computer Science", "BSCS", "IT", "College"],
+    56→    ["BS Information Technology", "BSIT", "IT", "College"],
+    57→    ["BS Chemistry", "BS Chem", "Science", "College"],
+    58→    ["BS Physics", "BS Physics", "Science", "College"],
+    59→    ["BS Biology", "BS Bio", "Science", "College"],
+    60→    ["BS Psychology", "BSPsych", "Social Science", "College"],
+    61→    ["AB Political Science", "AB PolSci", "Social Science", "College"],
+    62→    ["MS Mechanical Engineering", "MSME", "Engineering", "Graduate"],
+    63→    ["Master in Public Administration", "MPA", "Public Admin", "Graduate"],
+    64→    ["Master in Business Administration", "MBA", "Business", "Graduate"],
+    65→  ];
+    66→  for (const [name, abbr, category, level] of courses) {
+    67→    await db.course.upsert({ where: { name }, update: {}, create: { name, abbreviation: abbr, category, level } });
+    68→  }
+    69→
+    70→  const places = ["Accounting Unit", "Human Resource Development Unit", "Metrology Laboratory", "Materials and Corrosion Laboratory"];
+    71→  for (const name of places) {
+    72→    await db.placeOfAssignment.upsert({ where: { name }, update: {}, create: { name } });
+    73→  }
+    74→
+    75→  // ── Accounts ──────────────────────────────────────────────────────────────
+    76→  const hash = await bcrypt.hash("password123", 10);
+    77→  const accounts = [
+    78→    { username: "testadmin", email: "testadmin@mirdc.gov.ph", firstName: "Test", lastName: "Admin", role: "ADMIN" },
+    79→    { username: "testevaluator", email: "testevaluator@mirdc.gov.ph", firstName: "Test", lastName: "Evaluator", role: "EVALUATOR" },
+    80→    { username: "testapplicant", email: "testapplicant@mirdc.gov.ph", firstName: "Test", lastName: "Applicant", role: "APPLICANT" },
+    81→  ];
+    82→  const users: Record<string, string> = {};
+    83→  for (const a of accounts) {
+    84→    const user = await db.user.upsert({
+    85→      where: { username: a.username },
+    86→      update: { password: hash, role: a.role, blocked: false },
+    87→      create: { ...a, password: hash },
+    88→    });
+    89→    users[a.role] = user.id;
+    90→    if (a.role === "APPLICANT") {
+    91→      const existing = await db.applicant.findUnique({ where: { userId: user.id } });
+    92→      if (!existing) {
+    93→        await db.applicant.create({
+    94→          data: {
+    95→            userId: user.id,
+    96→            firstName: "Test",
+    97→            lastName: "Applicant",
+    98→            emailAddress: a.email,
+    99→            mobileNumber: "09171234567",
+   100→          },
+   101→        });
+   102→      }
+   103→    }
+   104→  }
+   105→
+   106→  // ── Positions + postings ──────────────────────────────────────────────────
+   107→  const day = 86400000;
+   108→  const now = Date.now();
+   109→
+   110→  const positionDefs = [
+   111→    {
+   112→      itemNumber: "MIRDC-MC1-1-1998",
+   113→      positionTitle: "Supervising Science Research Specialist",
+   114→      positionType: "Permanent",
+   115→      // MOM 2026-10-13 divisions refresh — MPRD is abolished; materials
+   116→      // research now sits under AMMRDD.
+   117→      division: "AMMRDD",
+   118→      placeOfAssignment: "Materials and Corrosion Laboratory",
+   119→      salaryGrade: "22", salaryStep: "1", salaryAmount: 66459,
+   120→      cscEducation: "Master's degree or Bachelor's degree relevant to the job",
+   121→      cscEligibility: "Career Service Professional", cscEligibilityGroup: "Career Service Professional (Second Level)",
+   122→      cscWorkExperience: "2 years of relevant experience",
+   123→      cscTraining: "16 hours of relevant training",
+   124→      license: "None required",
+   125→    },
+   126→    {
+   127→      itemNumber: "MIRDC-SC1-5-2006",
+   128→      positionTitle: "Science Research Specialist I",
+   129→      positionType: "Permanent",
+   130→      // Old "Testing Services Division" code now means Technology Solutions;
+   131→      // metrology/testing belongs to the new Analysis and Testing Division.
+   132→      division: "ATD",
+   133→      placeOfAssignment: "Metrology Laboratory",
+   134→      salaryGrade: "13", salaryStep: "1", salaryAmount: 31699,
+   135→      cscEducation: "Bachelor's degree relevant to the job",
+   136→      cscEligibility: "Career Service Professional", cscEligibilityGroup: "Career Service Professional (Second Level)",
+   137→      cscWorkExperience: "None required",
+   138→      cscTraining: "4 hours of relevant training",
+   139→      license: "None required",
+   140→    },
+   141→    {
+   142→      itemNumber: "MIRDC-AA1-3-2015",
+   143→      positionTitle: "Administrative Assistant I",
+   144→      positionType: "Permanent",
+   145→      division: "FAD",
+   146→      placeOfAssignment: "Accounting Unit",
+   147→      salaryGrade: "9", salaryStep: "1", salaryAmount: 22316,
+   148→      cscEducation: "Relevant vocational/trade course",
+   149→      cscEligibility: "Career Service Sub-Professional", cscEligibilityGroup: "Career Service Sub-Professional (First Level)",
+   150→      cscWorkExperience: "None required",
+   151→      cscTraining: "None required",
+   152→      license: "None required",
+   153→    },
+   154→    {
+   155→      itemNumber: "COS-2026-EMC-01",
+   156→      positionTitle: "Electronics Technician (Contract of Service)",
+   157→      positionType: "Contract of Service",
+   158→      division: "AMMRDD",
+   159→      placeOfAssignment: "Human Resource Development Unit",
+   160→      salaryGrade: null, salaryStep: null, salaryAmount: 28000,
+   161→      cscEducation: "Relevant vocational/trade course",
+   162→      cscEligibility: "N/A", cscEligibilityGroup: "N/A",
+   163→      cscWorkExperience: "1 year of relevant experience",
+   164→      cscTraining: "None required",
+   165→      license: "TESDA NC II an advantage",
+   166→    },
+   167→  ];
+   168→
+   169→  const positions: Record<string, number> = {};
+   170→  for (const p of positionDefs) {
+   171→    const existing = await db.position.findFirst({ where: { itemNumber: p.itemNumber } });
+   172→    const row = existing
+   173→      ? await db.position.update({ where: { id: existing.id }, data: p })
+   174→      : await db.position.create({ data: p });
+   175→    positions[p.positionTitle] = row.id;
+   176→  }
+   177→
+   178→  const jobDefs = [
+   179→    {
+   180→      title: "Supervising Science Research Specialist",
+   181→      positionType: "Permanent",
+   182→      numberOfVacancy: 1,
+   183→      briefDescription: "Leads research projects on metals and materials corrosion, mentors junior researchers, and represents the division in inter-agency collaborations.",
+   184→      dutiesResponsibilities: "• Lead R&D projects on materials corrosion and protection\n• Publish research outputs in peer-reviewed venues\n• Mentor junior research staff\n• Coordinate with industry partners on collaborative studies",
+   185→      compensationPackage: "SG-22 Step 1 (₱66,459 monthly) plus statutory benefits",
+   186→      otherQualifications: "Strong publication record preferred; experience in electrochemical testing an advantage.",
+   187→      deadlineOffsetDays: 21,
+   188→      positionKey: "Supervising Science Research Specialist",
+   189→    },
+   190→    {
+   191→      title: "Science Research Specialist I",
+   192→      positionType: "Permanent",
+   193→      numberOfVacancy: 2,
+   194→      briefDescription: "Performs calibration and testing services in the Metrology Laboratory and documents results in accordance with ISO/IEC 17025.",
+   195→      dutiesResponsibilities: "• Perform calibration of measurement instruments\n• Maintain laboratory quality-management documentation\n• Assist clients with testing requirements",
+   196→      compensationPackage: "SG-13 Step 1 (₱31,699 monthly) plus statutory benefits",
+   197→      otherQualifications: "Fresh graduates are encouraged to apply.",
+   198→      deadlineOffsetDays: 14,
+   199→      positionKey: "Science Research Specialist I",
+   200→    },
+   201→    {
+   202→      title: "Administrative Assistant I",
+   203→      positionType: "Permanent",
+   204→      numberOfVacancy: 1,
+   205→      briefDescription: "Provides administrative and records support to the Accounting Unit, including document routing and data entry.",
+   206→      dutiesResponsibilities: "• Prepare and route administrative documents\n• Maintain records and filing systems\n• Assist in inventory and supplies monitoring",
+   207→      compensationPackage: "SG-9 Step 1 (₱22,316 monthly) plus statutory benefits",
+   208→      otherQualifications: "Proficiency in office productivity software required.",
+   209→      deadlineOffsetDays: 10,
+   210→      positionKey: "Administrative Assistant I",
+   211→    },
+   212→    {
+   213→      title: "Electronics Technician (Contract of Service)",
+   214→      positionType: "Contract of Service",
+   215→      numberOfVacancy: 3,
+   216→      briefDescription: "Supports the fabrication and maintenance of electronics prototypes for advanced manufacturing research projects.",
+   217→      dutiesResponsibilities: "• Assemble and test electronics prototypes\n• Maintain laboratory equipment\n• Support project field deployments",
+   218→      compensationPackage: "₱28,000 monthly (contract of service)",
+   219→      otherQualifications: "TESDA NC II holders encouraged to apply.",
+   220→      deadlineOffsetDays: -3, // already closed — demonstrates the visibility rule
+   221→      positionKey: "Electronics Technician (Contract of Service)",
+   222→    },
+   223→  ];
+   224→
+   225→  const adminId = users["ADMIN"];
+   226→  for (const j of jobDefs) {
+   227→    const existing = await db.jobPosting.findFirst({ where: { title: j.title, positionId: positions[j.positionKey] } });
+   228→    const data = {
+   229→      title: j.title,
+   230→      positionType: j.positionType,
+   231→      numberOfVacancy: j.numberOfVacancy,
+   232→      briefDescription: j.briefDescription,
+   233→      briefDescriptionHtml: `<p>${j.briefDescription}</p>`,
+   234→      dutiesResponsibilities: j.dutiesResponsibilities,
+   235→      dutiesHtml: j.dutiesResponsibilities.split("\n").map((l) => `<p>${l}</p>`).join(""),
+   236→      compensationPackage: j.compensationPackage,
+   237→      compensationHtml: `<p>${j.compensationPackage}</p>`,
+   238→      otherQualifications: j.otherQualifications,
+   239→      otherQualificationsHtml: `<p>${j.otherQualifications}</p>`,
+   240→      publishDate: new Date(now - 10 * day),
+   241→      deadlineDate: new Date(now + j.deadlineOffsetDays * day),
+   242→      positionId: positions[j.positionKey],
+   243→      authorId: adminId,
+   244→      publishedAt: new Date(now - 10 * day),
+   245→    };
+   246→    if (!existing) await db.jobPosting.create({ data });
+   247→  }
+   248→
+   249→  // ── Sample applicant with complete profile + applications across stages ──
+   250→  const sampleEmail = "maria.santos@example.com";
+   251→  let sampleUser = await db.user.findUnique({ where: { username: "maria.santos" } });
+   252→  if (!sampleUser) {
+   253→    sampleUser = await db.user.create({
+   254→      data: {
+   255→        username: "maria.santos",
+   256→        email: sampleEmail,
+   257→        password: hash,
+   258→        firstName: "Maria",
+   259→        lastName: "Santos",
+   260→        role: "APPLICANT",
+   261→      },
+   262→    });
+   263→  }
+   264→  let sampleApplicant = await db.applicant.findUnique({ where: { userId: sampleUser.id } });
+   265→  if (!sampleApplicant) {
+   266→    sampleApplicant = await db.applicant.create({
+   267→      data: {
+   268→        userId: sampleUser.id,
+   269→        firstName: "Maria",
+   270→        middleName: "Reyes",
+   271→        lastName: "Santos",
+   272→        emailAddress: sampleEmail,
+   273→        mobileNumber: "09181234567",
+   274→        gender: "Female",
+   275→        civilStatus: "Single",
+   276→        citizenship: "Filipino",
+   277→        birthDate: "1996-05-14",
+   278→        birthPlace: "Quezon City",
+   279→        presentAddress: "12 Sampaguita St., Barangay San Roque",
+   280→        city: "Quezon City",
+   281→        province: "Metro Manila",
+   282→        country: "Philippines",
+   283→        zipCode: "1100",
+   284→        isProfileComplete: true,
+   285→        submittedDate: new Date(now - 5 * day),
+   286→        characterReference: JSON.stringify([
+   287→          { name: "Dr. Jose Cruz", title: "Chief, Materials Lab", company: "DOST-MIRDC", companyAddress: "Taguig", email: "jose.cruz@mirdc.gov.ph", contact: "09170000000" },
+   288→        ]),
+   289→      },
+   290→    });
+   291→    await db.education.createMany({
+   292→      data: [
+   293→        { applicantId: sampleApplicant.id, educationLevel: "College", course: "BS Chemistry", schoolName: "University of the Philippines", yearFrom: "2014", yearTo: "2018", yearGraduated: "2018", ord: 1 },
+   294→        { applicantId: sampleApplicant.id, educationLevel: "Secondary", schoolName: "Quezon City Science High School", yearFrom: "2010", yearTo: "2014", yearGraduated: "2014", ord: 2 },
+   295→      ],
+   296→    });
+   297→    await db.workExperience.createMany({
+   298→      data: [
+   299→        { applicantId: sampleApplicant.id, positionTitle: "Research Assistant", employerName: "DOST-ITDI", dateFrom: new Date("2019-01-01"), dateTo: new Date("2022-06-30"), isGovtService: true, statusOfEmployment: "Permanent", monthlySalary: 28000, yearDecimal: 3.5, ord: 1 },
+   300→        { applicantId: sampleApplicant.id, positionTitle: "Laboratory Analyst", employerName: "Private Testing Center", dateFrom: new Date("2022-07-01"), isPresentWork: true, isGovtService: false, statusOfEmployment: "Permanent", monthlySalary: 35000, yearDecimal: 3.1, ord: 2 },
+   301→      ],
+   302→    });
+   303→    await db.training.createMany({
+   304→      data: [
+   305→        { applicantId: sampleApplicant.id, title: "Basic Occupational Safety and Health", numberHours: 40, typeOfTraining: "Technical", dateFrom: new Date("2019-06-10"), dateTo: new Date("2019-06-14"), ord: 1 },
+   306→        { applicantId: sampleApplicant.id, title: "ISO/IEC 17025 Internal Auditor Training", numberHours: 24, typeOfTraining: "Technical", dateFrom: new Date("2021-03-01"), dateTo: new Date("2021-03-03"), ord: 2 },
+   307→      ],
+   308→    });
+   309→    await db.eligibility.create({
+   310→      data: { applicantId: sampleApplicant.id, title: "Career Service Professional (Second Level)", rating: "86.40", examDate: "2018-08-12", examPlace: "Quezon City", ord: 1 },
+   311→    });
+   312→    await db.award.create({
+   313→      data: { applicantId: sampleApplicant.id, recognitionType: "Award", scope: "Individual", details: "Best Poster Award — National Chemistry Conference", provider: "Philippine Federation of Chemistry Societies", dateGranted: "2021-11-20", ord: 1 },
+   314→    });
+   315→  }
+   316→
+   317→  // Applications across stages for the sample applicant
+   318→  const jobs = await db.jobPosting.findMany({ include: { position: true } });
+   319→  const srs = jobs.find((j) => j.title.includes("Supervising"));
+   320→  const srs1 = jobs.find((j) => j.title === "Science Research Specialist I");
+   321→
+   322→  async function ensureApplication(job: (typeof jobs)[number] | undefined, status: string, daysAgo: number) {
+   323→    if (!job) return;
+   324→    // (applicantId, jobId) is no longer unique (MOM 2026-10-13 re-application)
+   325→    // — find the ACTIVE application, else the most recent row.
+   326→    const existing =
+   327→      (await db.application.findFirst({
+   328→        where: {
+   329→          applicantId: sampleApplicant!.id,
+   330→          jobId: job.id,
+   331→          status: { notIn: ["Rejected", "Declined", "Withdrawn"] },
+   332→        },
+   333→        orderBy: { dateApplied: "desc" },
+   334→      })) ??
+   335→      (await db.application.findFirst({
+   336→        where: { applicantId: sampleApplicant!.id, jobId: job.id },
+   337→        orderBy: { dateApplied: "desc" },
+   338→      }));
+   339→    if (existing) {
+   340→      await db.application.update({ where: { id: existing.id }, data: { status } });
+   341→      return;
+   342→    }
+   343→    const app = await db.application.create({
+   344→      data: { applicantId: sampleApplicant!.id, jobId: job.id, status, dateApplied: new Date(now - daysAgo * day) },
+   345→    });
+   346→    // write snapshots from the live profile
+   347→    const full = await db.applicant.findUnique({
+   348→      where: { id: sampleApplicant!.id },
+   349→      include: { educations: true, workExperiences: true, trainings: true, eligibilities: true, awards: true },
+   350→    });
+   351→    if (full) {
+   352→      await db.application.update({
+   353→        where: { id: app.id },
+   354→        data: {
+   355→          snapshotProfile: JSON.stringify({
+   356→            id: full.id, firstName: full.firstName, lastName: full.lastName, emailAddress: full.emailAddress,
+   357→            contactNumber: full.mobileNumber, gender: full.gender, civilStatus: full.civilStatus,
+   358→            citizenship: full.citizenship, birthDate: full.birthDate, presentAddress: full.presentAddress,
+   359→            city: full.city, province: full.province, country: full.country,
+   360→            characterReference: JSON.parse(full.characterReference || "null"),
+   361→          }),
+   362→          snapshotEducations: JSON.stringify(full.educations),
+   363→          snapshotExperiences: JSON.stringify(full.workExperiences),
+   364→          snapshotTrainings: JSON.stringify(full.trainings),
+   365→          snapshotEligibilities: JSON.stringify(full.eligibilities),
+   366→          snapshotAwards: JSON.stringify(full.awards),
+   367→        },
+   368→      });
+   369→    }
+   370→  }
+   371→
+   372→  await ensureApplication(srs, "Under Review", 6);
+   373→  await ensureApplication(srs1, "Shortlisted", 4);
+   374→
+   375→  // (deduped by description so re-running the seed never double-posts)
+   376→  for (const [d, daysAgo] of [
+   377→    ["Your application for Supervising Science Research Specialist is now Under Review.", 5],
+   378→    ["You have been shortlisted for Science Research Specialist I. A notice has been sent to your email.", 3],
+   379→  ] as const) {
+   380→    const exists = await db.notification.findFirst({ where: { applicantId: sampleApplicant.id, description: d } });
+   381→    if (!exists)
+   382→      await db.notification.create({ data: { applicantId: sampleApplicant.id, name: "Application update", description: d, createdAt: new Date(now - daysAgo * day) } });
+   383→  }
+   384→  // ══════════════════════════════════════════════════════════════════════════
+   385→  // Task 14 — FULL-FLOW DEMO DATASET
+   386→  // Every pipeline stage, every role's screens, every MOM surface gets data:
+   387→  //   Applicants   — complete profiles (education/experience/training/
+   388→  //                  eligibility/awards/character refs/PDF documents)
+   389→  //   Applications — Applied · Under Review · Shortlisted · Rejected ·
+   390→  //                  Withdrawn · a rejected→re-applied pair (MOM re-application)
+   391→  //   Notices      — email + SMS ledger rows built from the REAL templates
+   392→  //                  (regret letters, shortlist notices, interview + skills-exam
+   393→  //                  invitations incl. an Online-mode one with a meeting link)
+   394→  //   Bulk cohort  — 2 shortlisted on SRS I and 2 on Supervising (bulk invitations)
+   395→  //   Prior-reject — a ×2 previously-rejected row for the evaluator queue
+   396→  //   Admin        — audit trail, contact requests, users to manage
+   397→  // All helpers are idempotent: re-running the seed normalizes statuses and
+   398→  // never duplicates rows, profiles or files.
+   399→  // ══════════════════════════════════════════════════════════════════════════
+   400→
+   401→  const isActiveStatus = (s: string) => !["REJECTED", "DECLINED", "WITHDRAWN"].includes((s || "").toUpperCase());
+   402→  const isRejStatus = (s: string) => ["REJECTED", "DECLINED"].includes((s || "").toUpperCase());
+   403→  const jobAdminFind = () => jobs.find((j) => j.title === "Administrative Assistant I");
+   404→  const jobElecFind = () => jobs.find((j) => j.title.includes("Electronics"));
+   405→
+   406→  // ── minimal but VALID one-page PDF generator (document previews render) ──
+   407→  function makePdf(title: string, lines: string[]): Buffer {
+   408→    const esc = (s: string) => s.replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)");
+   409→    let stream = `BT /F1 16 Tf 72 740 Td 22 TL (${esc(title)}) Tj T*\n`;
+   410→    for (const l of lines) stream += `(${esc(l)}) Tj T*\n`;
+   411→    stream += "ET";
+   412→    const objs = [
+   413→      "<< /Type /Catalog /Pages 2 0 R >>",
+   414→      "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+   415→      "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>",
+   416→      `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`,
+   417→      "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+   418→    ];
+   419→    let pdf = "%PDF-1.4\n";
+   420→    const offsets: number[] = [];
+   421→    objs.forEach((body, i) => {
+   422→      offsets.push(pdf.length);
+   423→      pdf += `${i + 1} 0 obj\n${body}\nendobj\n`;
+   424→    });
+   425→    const xrefStart = pdf.length;
+   426→    pdf += `xref\n0 ${objs.length + 1}\n0000000000 65535 f \n`;
+   427→    for (const off of offsets) pdf += `${String(off).padStart(10, "0")} 00000 n \n`;
+   428→    pdf += `trailer\n<< /Size ${objs.length + 1} /Root 1 0 R >>\nstartxref\n${xrefStart}\n%%EOF`;
+   429→    return Buffer.from(pdf, "latin1");
+   430→  }
+   431→
+   432→  // ── idempotent writers ────────────────────────────────────────────────────
+   433→  async function writeSnapshots(appId: number, applicantId: number) {
+   434→    const full = await db.applicant.findUnique({
+   435→      where: { id: applicantId },
+   436→      include: { educations: true, workExperiences: true, trainings: true, eligibilities: true, awards: true },
+   437→    });
+   438→    if (!full) return;
+   439→    await db.application.update({
+   440→      where: { id: appId },
+   441→      data: {
+   442→        snapshotProfile: JSON.stringify({
+   443→          id: full.id, firstName: full.firstName, middleName: full.middleName, lastName: full.lastName,
+   444→          emailAddress: full.emailAddress, contactNumber: full.mobileNumber, gender: full.gender,
+   445→          civilStatus: full.civilStatus, citizenship: full.citizenship, birthDate: full.birthDate,
+   446→          birthPlace: full.birthPlace, presentAddress: full.presentAddress, city: full.city,
+   447→          province: full.province, country: full.country,
+   448→          characterReference: JSON.parse(full.characterReference || "null"),
+   449→        }),
+   450→        snapshotEducations: JSON.stringify(full.educations),
+   451→        snapshotExperiences: JSON.stringify(full.workExperiences),
+   452→        snapshotTrainings: JSON.stringify(full.trainings),
+   453→        snapshotEligibilities: JSON.stringify(full.eligibilities),
+   454→        snapshotAwards: JSON.stringify(full.awards),
+   455→      },
+   456→    });
+   457→  }
+   458→
+   459→  type DemoProfile = {
+   460→    username?: string; // absent → walk-in record without a login
+   461→    email: string; firstName: string; middleName?: string; lastName: string;
+   462→    gender: string; civilStatus: string; birthDate: string; birthPlace: string;
+   463→    street: string; city: string; province: string; zipCode: string; mobile: string;
+   464→    refs: { name: string; title: string; company: string; companyAddress: string; email: string; contact: string }[];
+   465→    educations: { educationLevel: string; course?: string; schoolName: string; yearFrom: string; yearTo?: string; yearGraduated?: string; ongoing?: boolean }[];
+   466→    experiences: { positionTitle: string; employerName: string; dateFrom: string; dateTo?: string; isPresentWork?: boolean; isGovtService?: boolean; statusOfEmployment: string; monthlySalary: number; yearDecimal: number }[];
+   467→    trainings: { title: string; typeOfTraining: string; numberHours: number; dateFrom: string; dateTo: string }[];
+   468→    eligibilities: { title: string; rating?: string; examDate?: string; examPlace?: string }[];
+   469→    awards?: { recognitionType: string; scope: string; details: string; provider: string; dateGranted: string }[];
+   470→    submittedDaysAgo: number | null; // null → incomplete profile (apply gate demo)
+   471→  };
+   472→
+   473→  async function ensureDemoApplicant(p: DemoProfile): Promise<number> {
+   474→    let userId: string | null = null;
+   475→    if (p.username) {
+   476→      const user = await db.user.upsert({
+   477→        where: { username: p.username },
+   478→        update: { password: hash, role: "APPLICANT", blocked: false },
+   479→        create: { username: p.username, email: p.email, password: hash, firstName: p.firstName, lastName: p.lastName, role: "APPLICANT" },
+   480→      });
+   481→      userId = user.id;
+   482→    }
+   483→    const applicant =
+   484→      (userId ? await db.applicant.findUnique({ where: { userId } }) : null) ??
+   485→      (await db.applicant.findFirst({ where: { emailAddress: p.email, userId: null } }));
+   486→    let row = applicant;
+   487→    if (!row) {
+   488→      row = await db.applicant.create({
+   489→        data: {
+   490→          userId, firstName: p.firstName, middleName: p.middleName, lastName: p.lastName,
+   491→          emailAddress: p.email, mobileNumber: p.mobile, contactNumber: p.mobile,
+   492→          gender: p.gender, civilStatus: p.civilStatus, citizenship: "Filipino",
+   493→          birthDate: p.birthDate, birthPlace: p.birthPlace,
+   494→          presentAddress: p.street, street: p.street, city: p.city, province: p.province,
+   495→          country: "Philippines", zipCode: p.zipCode,
+   496→          isProfileComplete: p.submittedDaysAgo != null,
+   497→          submittedDate: p.submittedDaysAgo != null ? new Date(now - p.submittedDaysAgo * day) : null,
+   498→        },
+   499→      });
+   500→    }
+   501→    if (!row.characterReference && p.refs.length)
+   502→      row = await db.applicant.update({ where: { id: row.id }, data: { characterReference: JSON.stringify(p.refs) } });
+   503→    // Purge noise rows (no level AND no course/degree/specify) — they can
+   504→    // never satisfy an MQR education clause but would block section seeding.
+   505→    await db.education.deleteMany({
+   506→      where: { applicantId: row.id, AND: [{ educationLevel: null }, { course: null }, { degree: null }, { specifyOthers: null }] },
+   507→    });
+   508→    // Section fill is idempotent — but a half-empty row (e.g. a leftover
+   509→    // all-null entry from manual testing) must NOT block proper seeding, so
+   510→    // the counts look for rows with meaningful content only.
+   511→    if ((await db.education.count({ where: { applicantId: row.id, OR: [{ educationLevel: { not: null } }, { course: { not: null } }, { degree: { not: null } }, { specifyOthers: { not: null } }] } })) === 0 && p.educations.length)
+   512→      await db.education.createMany({ data: p.educations.map((e, i) => ({ applicantId: row!.id, ...e, ord: i + 1 })) });
+   513→    if ((await db.workExperience.count({ where: { applicantId: row.id, positionTitle: { not: null } } })) === 0 && p.experiences.length)
+   514→      await db.workExperience.createMany({
+   515→        data: p.experiences.map((e, i) => ({
+   516→          applicantId: row!.id, positionTitle: e.positionTitle, employerName: e.employerName,
+   517→          dateFrom: new Date(e.dateFrom), dateTo: e.dateTo ? new Date(e.dateTo) : null,
+   518→          isPresentWork: !!e.isPresentWork, isGovtService: !!e.isGovtService,
+   519→          statusOfEmployment: e.statusOfEmployment, monthlySalary: e.monthlySalary,
+   520→          yearDecimal: e.yearDecimal, ord: i + 1,
+   521→        })),
+   522→      });
+   523→    if ((await db.training.count({ where: { applicantId: row.id, title: { not: null } } })) === 0 && p.trainings.length)
+   524→      await db.training.createMany({
+   525→        data: p.trainings.map((t, i) => ({
+   526→          applicantId: row!.id, title: t.title, typeOfTraining: t.typeOfTraining,
+   527→          numberHours: t.numberHours, dateFrom: new Date(t.dateFrom), dateTo: new Date(t.dateTo), ord: i + 1,
+   528→        })),
+   529→      });
+   530→    if ((await db.eligibility.count({ where: { applicantId: row.id } })) === 0 && p.eligibilities.length)
+   531→      await db.eligibility.createMany({ data: p.eligibilities.map((e, i) => ({ applicantId: row!.id, ...e, ord: i + 1 })) });
+   532→    if ((await db.award.count({ where: { applicantId: row.id } })) === 0 && p.awards?.length)
+   533→      await db.award.createMany({ data: p.awards.map((a, i) => ({ applicantId: row!.id, ...a, ord: i + 1 })) });
+   534→    return row.id;
+   535→  }
+   536→
+   537→  async function ensureDemoApplication(applicantId: number, job: (typeof jobs)[number] | undefined, status: string, daysAgo: number, reason?: string | null) {
+   538→    if (!job) return null;
+   539→    const rows = await db.application.findMany({ where: { applicantId, jobId: job.id }, orderBy: { dateApplied: "desc" } });
+   540→    let row = rows.find((r) => isActiveStatus(r.status)) ?? rows[0] ?? null;
+   541→    if (row) {
+   542→      if (row.status !== status || (reason ?? null) !== row.reason)
+   543→        await db.application.update({ where: { id: row.id }, data: { status, reason: reason ?? null } });
+   544→    } else {
+   545→      row = await db.application.create({
+   546→        data: { applicantId, jobId: job.id, status, reason: reason ?? null, dateApplied: new Date(now - daysAgo * day) },
+   547→      });
+   548→      await writeSnapshots(row.id, applicantId);
+   549→    }
+   550→    return row;
+   551→  }
+   552→
+   553→  /** The MOM re-application pair: one REJECTED row + one active re-apply row
+   554→   *  on the same posting (drives the queue chip, workspace banner, Re-apply). */
+   555→  async function ensureReapplyPair(applicantId: number, job: (typeof jobs)[number] | undefined, rejectedDaysAgo: number, reason: string, reappliedDaysAgo: number) {
+   556→    if (!job) return;
+   557→    const rows = await db.application.findMany({ where: { applicantId, jobId: job.id }, orderBy: { dateApplied: "asc" } });
+   558→    let rejected = rows.find((r) => isRejStatus(r.status)) ?? null;
+   559→    if (!rejected) {
+   560→      rejected = await db.application.create({
+   561→        data: { applicantId, jobId: job.id, status: "Rejected", reason, dateApplied: new Date(now - rejectedDaysAgo * day) },
+   562→      });
+   563→      await writeSnapshots(rejected.id, applicantId);
+   564→    } else if (rejected.status !== "Rejected" || rejected.reason !== reason) {
+   565→      await db.application.update({ where: { id: rejected.id }, data: { status: "Rejected", reason } });
+   566→    }
+   567→    const active = rows.find((r) => isActiveStatus(r.status)) ?? null;
+   568→    if (!active) {
+   569→      const fresh = await db.application.create({
+   570→        data: { applicantId, jobId: job.id, status: "Applied", dateApplied: new Date(now - reappliedDaysAgo * day) },
+   571→      });
+   572→      await writeSnapshots(fresh.id, applicantId);
+   573→    } else if (active.status !== "Applied") {
+   574→      await db.application.update({ where: { id: active.id }, data: { status: "Applied", reason: null } });
+   575→    }
+   576→  }
+   577→
+   578→  async function ensureEmail(to: string, payload: { subject: string; bodyText: string; bodyHtml?: string }, relatedId: number, daysAgo: number) {
+   579→    const exists = await db.emailLog.findFirst({ where: { to, subject: payload.subject, relatedType: "application", relatedId } });
+   580→    if (exists) return;
+   581→    await db.emailLog.create({
+   582→      data: { to, subject: payload.subject, bodyText: payload.bodyText, bodyHtml: payload.bodyHtml, provider: "mock", status: "mock", relatedType: "application", relatedId, createdAt: new Date(now - daysAgo * day) },
+   583→    });
+   584→  }
+   585→
+   586→  async function ensureSms(to: string, message: string, relatedId: number, daysAgo: number) {
+   587→    const exists = await db.smsLog.findFirst({ where: { to, message, relatedType: "application", relatedId } });
+   588→    if (exists) return;
+   589→    await db.smsLog.create({ data: { to, message, provider: "mock", status: "mock", relatedType: "application", relatedId, createdAt: new Date(now - daysAgo * day) } });
+   590→  }
+   591→
+   592→  async function ensureNotification(applicantId: number, name: string, description: string, daysAgo: number) {
+   593→    const exists = await db.notification.findFirst({ where: { applicantId, description } });
+   594→    if (exists) return;
+   595→    await db.notification.create({ data: { applicantId, name, description, createdAt: new Date(now - daysAgo * day) } });
+   596→  }
+   597→
+   598→  async function ensureDocument(applicantId: number, originalName: string, category: string, status: string, daysAgo: number, qualityScore?: number) {
+   599→    const exists = await db.document.findFirst({ where: { applicantId, originalName } });
+   600→    if (exists) return;
+   601→    const dir = path.join(process.cwd(), "upload", String(applicantId));
+   602→    fs.mkdirSync(dir, { recursive: true });
+   603→    const fileName = `${crypto.randomUUID()}.pdf`;
+   604→    const buf = makePdf(originalName.replace(/\.pdf$/i, "").replace(/_/g, " "), [
+   605→      "Metals Industry Research and Development Center",
+   606→      "DOST Compound, Gen. Santos Ave., Bicutan, Taguig City",
+   607→      "",
+   608→      "This is a seeded demo document generated by prisma/seed.ts",
+   609→      `for applicant #${applicantId} (${originalName}).`,
+   610→      "",
+   611→      `Generated on ${new Date().toISOString().slice(0, 10)}. Safe to delete.`,
+   612→    ]);
+   613→    fs.writeFileSync(path.join(dir, fileName), buf);
+   614→    await db.document.create({
+   615→      data: {
+   616→        applicantId, fileName, originalName, mimeType: "application/pdf", size: buf.byteLength,
+   617→        filePath: `upload/${applicantId}/${fileName}`, category, status,
+   618→        qualityScore: qualityScore ?? null,
+   619→        extractedAt: status === "EXTRACTED" ? new Date(now - (daysAgo - 0.2) * day) : null,
+   620→        createdAt: new Date(now - daysAgo * day),
+   621→      },
+   622→    });
+   623→  }
+   624→
+   625→  async function ensureAudit(daysAgo: number, entry: { userId?: string | null; userLabel?: string | null; userRole?: string | null; action: string; entityType?: string; entityId?: string | number | null; description: string }) {
+   626→    const exists = await db.auditLog.findFirst({ where: { action: entry.action, description: entry.description } });
+   627→    if (exists) return;
+   628→    await db.auditLog.create({
+   629→      data: {
+   630→        userId: entry.userId ?? null, userLabel: entry.userLabel ?? null, userRole: entry.userRole ?? null,
+   631→        action: entry.action, entityType: entry.entityType ?? null,
+   632→        entityId: entry.entityId != null ? String(entry.entityId) : null,
+   633→        description: entry.description, timestamp: new Date(now - daysAgo * day),
+   634→      },
+   635→    });
+   636→  }
+   637→
+   638→  async function ensureContactRequest(name: string, email: string, subject: string, message: string, status: "OPEN" | "RESOLVED", daysAgo: number, resolvedDaysAgo?: number) {
+   639→    const exists = await db.contactRequest.findFirst({ where: { email, subject } });
+   640→    if (exists) return;
+   641→    await db.contactRequest.create({
+   642→      data: {
+   643→        name, email, subject, message, status,
+   644→        handledById: status === "RESOLVED" ? users["ADMIN"] : null,
+   645→        createdAt: new Date(now - daysAgo * day),
+   646→        resolvedAt: status === "RESOLVED" ? new Date(now - (resolvedDaysAgo ?? daysAgo) * day) : null,
+   647→      },
+   648→    });
+   649→  }
+   650→
+   651→  // ── profiles ──────────────────────────────────────────────────────────────
+   652→  const emailOf = (u: string) => `${u}@example.com`;
+   653→
+   654→  // testapplicant — COMPLETE profile, zero applications: sign in and apply live
+   655→  await ensureDemoApplicant({
+   656→    username: "testapplicant", email: "testapplicant@mirdc.gov.ph",
+   657→    firstName: "Test", middleName: "Demo", lastName: "Applicant",
+   658→    gender: "Male", civilStatus: "Single", birthDate: "1998-02-20", birthPlace: "Makati City",
+   659→    street: "24 Kalayaan Ave., Barangay Diliman", city: "Quezon City", province: "Metro Manila", zipCode: "1101",
+   660→    mobile: "09171234567",
+   661→    refs: [
+   662→      { name: "Engr. Ana Cruz", title: "Supervisor", company: "TechServe Solutions Inc.", companyAddress: "Taguig City", email: "ana.cruz@example.com", contact: "09171112233" },
+   663→    ],
+   664→    educations: [
+   665→      { educationLevel: "College", course: "BS Information Technology", schoolName: "Polytechnic University of the Philippines", yearFrom: "2016", yearTo: "2020", yearGraduated: "2020" },
+   666→      { educationLevel: "Secondary", schoolName: "Rizal High School", yearFrom: "2012", yearTo: "2016", yearGraduated: "2016" },
+   667→    ],
+   668→    experiences: [
+   669→      { positionTitle: "IT Support Specialist", employerName: "TechServe Solutions Inc.", dateFrom: "2021-07-01", isPresentWork: true, statusOfEmployment: "Regular", monthlySalary: 26000, yearDecimal: 3.2 },
+   670→    ],
+   671→    trainings: [
+   672→      { title: "Computer Systems Servicing NC II", typeOfTraining: "Technical", numberHours: 96, dateFrom: "2020-11-10", dateTo: "2020-12-05" },
+   673→    ],
+   674→    eligibilities: [
+   675→      { title: "Career Service Professional (Second Level)", rating: "84.10", examDate: "2021-03-14", examPlace: "Quezon City" },
+   676→      { title: "Career Service Sub-Professional (First Level)", rating: "81.75", examDate: "2019-08-11", examPlace: "Quezon City" },
+   677→    ],
+   678→    submittedDaysAgo: 30,
+   679→  });
+   680→  await ensureDocument(1, "Certificate_of_Employment.pdf", "SUPPORTING", "UPLOADED", 20);
+   681→
+   682→  // carlo.reyes — Applied (fresh) + a Withdrawn history row
+   683→  const carloId = await ensureDemoApplicant({
+   684→    username: "carlo.reyes", email: emailOf("carlo.reyes"),
+   685→    firstName: "Carlo", middleName: "Mendoza", lastName: "Reyes",
+   686→    gender: "Male", civilStatus: "Married", birthDate: "1993-11-08", birthPlace: "Pasig City",
+   687→    street: "8 M. Sanchez St., Barangay Sagad", city: "Pasig City", province: "Metro Manila", zipCode: "1600",
+   688→    mobile: "09175551001",
+   689→    refs: [{ name: "Arch. Leo Tan", title: "Project Lead", company: "BuildRight Engineering", companyAddress: "Pasig City", email: "leo.tan@example.com", contact: "09175551999" }],
+   690→    educations: [
+   691→      { educationLevel: "College", course: "BS Mechanical Engineering", schoolName: "University of Santo Tomas", yearFrom: "2011", yearTo: "2016", yearGraduated: "2016" },
+   692→    ],
+   693→    experiences: [
+   694→      { positionTitle: "CAD Technician", employerName: "BuildRight Engineering", dateFrom: "2018-01-15", isPresentWork: true, statusOfEmployment: "Regular", monthlySalary: 30000, yearDecimal: 5.6 },
+   695→    ],
+   696→    trainings: [{ title: "AutoCAD 2D and 3D Drafting", typeOfTraining: "Technical", numberHours: 40, dateFrom: "2019-05-20", dateTo: "2019-05-25" }],
+   697→    eligibilities: [{ title: "Career Service Professional (Second Level)", rating: "85.20", examDate: "2017-10-15", examPlace: "Manila" }],
+   698→    submittedDaysAgo: 12,
+   699→  });
+   700→  const carloApplied = await ensureDemoApplication(carloId, srs1, "Applied", 2);
+   701→  const carloWithdrawn = await ensureDemoApplication(carloId, jobAdminFind(), "Withdrawn", 9, "Accepted a position in another agency.");
+   702→
+   703→  // ana.lim — Under Review on the closed COS posting + Withdrawn on Supervising
+   704→  const anaId = await ensureDemoApplicant({
+   705→    username: "ana.lim", email: emailOf("ana.lim"),
+   706→    firstName: "Ana", middleName: "Flores", lastName: "Lim",
+   707→    gender: "Female", civilStatus: "Single", birthDate: "1997-06-30", birthPlace: "Manila",
+   708→    street: "15 Quirino Ave., Barangay Malate", city: "Manila", province: "Metro Manila", zipCode: "1004",
+   709→    mobile: "09175551002",
+   710→    refs: [{ name: "Dr. Rosa Villar", title: "Lab Manager", company: "Manila Analytical Services", companyAddress: "Manila", email: "rosa.villar@example.com", contact: "09175551888" }],
+   711→    educations: [
+   712→      { educationLevel: "College", course: "BS Chemistry", schoolName: "University of the Philippines Manila", yearFrom: "2015", yearTo: "2019", yearGraduated: "2019" },
+   713→    ],
+   714→    experiences: [
+   715→      { positionTitle: "Laboratory Analyst", employerName: "Manila Analytical Services", dateFrom: "2019-09-01", isPresentWork: true, statusOfEmployment: "Regular", monthlySalary: 32000, yearDecimal: 5.0 },
+   716→    ],
+   717→    trainings: [{ title: "Good Laboratory Practice (GLP)", typeOfTraining: "Technical", numberHours: 24, dateFrom: "2022-02-14", dateTo: "2022-02-16" }],
+   718→    eligibilities: [{ title: "Career Service Professional (Second Level)", rating: "88.05", examDate: "2019-08-11", examPlace: "Manila" }],
+   719→    awards: [{ recognitionType: "Award", scope: "Individual", details: "Best Technical Paper — Analytical Chemistry Symposium", provider: "Kapisanang Kimika ng Pilipinas", dateGranted: "2023-05-18" }],
+   720→    submittedDaysAgo: 20,
+   721→  });
+   722→  const anaReview = await ensureDemoApplication(anaId, jobElecFind(), "Under Review", 12);
+   723→  const anaWithdrawn = await ensureDemoApplication(anaId, srs, "Withdrawn", 15, "Pursued further studies.");
+   724→
+   725→  // james.mendoza — Rejected on SRS I + ×2 prior rejection pair on Electronics
+   726→  const jamesId = await ensureDemoApplicant({
+   727→    username: "james.mendoza", email: emailOf("james.mendoza"),
+   728→    firstName: "James", middleName: "Aquino", lastName: "Mendoza",
+   729→    gender: "Male", civilStatus: "Single", birthDate: "1995-09-12", birthPlace: "Caloocan City",
+   730→    street: "3 P. Zamora St., Barangay 12", city: "Caloocan City", province: "Metro Manila", zipCode: "1400",
+   731→    mobile: "09175551003",
+   732→    refs: [{ name: "Engr. Gil Santos", title: "Chief Technician", company: "Voltas Electronics", companyAddress: "Caloocan City", email: "gil.santos@example.com", contact: "09175551777" }],
+   733→    educations: [
+   734→      { educationLevel: "College", course: "BS Electrical Engineering", schoolName: "Far Eastern University", yearFrom: "2013", yearTo: "2018", yearGraduated: "2018" },
+   735→    ],
+   736→    experiences: [
+   737→      { positionTitle: "Electronics Technician", employerName: "Voltas Electronics", dateFrom: "2022-03-01", isPresentWork: true, statusOfEmployment: "Contractual", monthlySalary: 24000, yearDecimal: 3.4 },
+   738→    ],
+   739→    trainings: [{ title: "Mechatronics Servicing NC II", typeOfTraining: "Technical", numberHours: 72, dateFrom: "2021-01-11", dateTo: "2021-02-08" }],
+   740→    eligibilities: [{ title: "Career Service Professional (Second Level)", rating: "82.90", examDate: "2019-03-17", examPlace: "Caloocan City" }],
+   741→    submittedDaysAgo: 45,
+   742→  });
+   743→  const jamesRejectedSrs = await ensureDemoApplication(jamesId, srs1, "Rejected", 10, "Did not meet the qualification standards after initial document screening.");
+   744→  const jamesElecApplied = await ensureDemoApplication(jamesId, jobElecFind(), "Applied", 18);
+   745→  // Two HISTORICAL rejection cycles on Electronics (earlier repostings) — the
+   746→  // evaluator queue must show "Previously rejected ×2" on his active row.
+   747→  const jamesHistorical = [
+   748→    { reason: "Incomplete supporting documents submitted.", daysAgo: 40 },
+   749→    { reason: "Did not attend the scheduled interview.", daysAgo: 20 },
+   750→  ];
+   751→  for (const h of jamesHistorical) {
+   752→    const existing = await db.application.findFirst({
+   753→      where: { applicantId: jamesId, jobId: jobElecFind()!.id, status: "Rejected", reason: h.reason },
+   754→    });
+   755→    if (existing) continue;
+   756→    const created = await db.application.create({
+   757→      data: { applicantId: jamesId, jobId: jobElecFind()!.id, status: "Rejected", reason: h.reason, dateApplied: new Date(now - h.daysAgo * day) },
+   758→    });
+   759→    await writeSnapshots(created.id, jamesId);
+   760→  }
+   761→
+   762→  // grace.villanueva — Shortlisted on Supervising (exam sent) + SRS I (bulk pair)
+   763→  const graceId = await ensureDemoApplicant({
+   764→    username: "grace.villanueva", email: emailOf("grace.villanueva"),
+   765→    firstName: "Grace", middleName: "Navarro", lastName: "Villanueva",
+   766→    gender: "Female", civilStatus: "Married", birthDate: "1992-01-25", birthPlace: "Taguig City",
+   767→    street: "22 Brgy. Ususan, Herminia St.", city: "Taguig City", province: "Metro Manila", zipCode: "1630",
+   768→    mobile: "09175551004",
+   769→    refs: [
+   770→      { name: "Dr. Mila Ramos", title: "Division Chief", company: "DOST-ITDI", companyAddress: "Taguig City", email: "mila.ramos@example.com", contact: "09175551666" },
+   771→      { name: "Mr. Rey Lopez", title: "Senior Chemist", company: "PetroLab Inc.", companyAddress: "Batangas City", email: "rey.lopez@example.com", contact: "09175551655" },
+   772→    ],
+   773→    educations: [
+   774→      { educationLevel: "Graduate Studies", course: "MS Chemistry", schoolName: "University of the Philippines Diliman", yearFrom: "2018", yearTo: "2021", yearGraduated: "2021" },
+   775→      { educationLevel: "College", course: "BS Chemistry", schoolName: "University of Santo Tomas", yearFrom: "2010", yearTo: "2014", yearGraduated: "2014" },
+   776→    ],
+   777→    experiences: [
+   778→      { positionTitle: "Senior Laboratory Analyst", employerName: "PetroLab Inc.", dateFrom: "2019-02-01", isPresentWork: true, statusOfEmployment: "Regular", monthlySalary: 52000, yearDecimal: 6.5 },
+   779→    ],
+   780→    trainings: [
+   781→      { title: "ISO/IEC 17025 Lead Assessor Course", typeOfTraining: "Technical", numberHours: 40, dateFrom: "2022-08-15", dateTo: "2022-08-19" },
+   782→      { title: "Instrumental Methods of Analysis", typeOfTraining: "Technical", numberHours: 16, dateFrom: "2021-04-05", dateTo: "2021-04-06" },
+   783→    ],
+   784→    eligibilities: [{ title: "Career Service Professional (Second Level)", rating: "89.60", examDate: "2015-10-18", examPlace: "Taguig City" }],
+   785→    awards: [{ recognitionType: "Award", scope: "Individual", details: "Outstanding Young Chemist Award", provider: "Philippine Federation of Chemistry Societies", dateGranted: "2022-04-21" }],
+   786→    submittedDaysAgo: 14,
+   787→  });
+   788→  const graceSupervised = await ensureDemoApplication(graceId, srs, "Shortlisted", 7);
+   789→  const graceSrs = await ensureDemoApplication(graceId, srs1, "Shortlisted", 3);
+   790→  await ensureDocument(graceId, "PDS_Grace_Villanueva.pdf", "PDS", "UPLOADED", 10);
+   791→  await ensureDocument(graceId, "Transcript_of_Records.pdf", "EDUCATION", "UPLOADED", 10);
+   792→
+   793→  // paolo.garcia — Shortlisted on Supervising (ONLINE interview invite sent)
+   794→  const paoloId = await ensureDemoApplicant({
+   795→    username: "paolo.garcia", email: emailOf("paolo.garcia"),
+   796→    firstName: "Paolo", middleName: "Dela Cruz", lastName: "Garcia",
+   797→    gender: "Male", civilStatus: "Single", birthDate: "1994-04-02", birthPlace: "Mandaluyong City",
+   798→    street: "10 Boni Ave., Barangay Hulo", city: "Mandaluyong City", province: "Metro Manila", zipCode: "1550",
+   799→    mobile: "09175551005",
+   800→    refs: [{ name: "Ms. Irene Pascual", title: "HR Manager", company: "Systems Plus Inc.", companyAddress: "Mandaluyong City", email: "irene.pascual@example.com", contact: "09175551444" }],
+   801→    educations: [
+   802→      { educationLevel: "College", course: "BS Information Technology", schoolName: "Mapua University", yearFrom: "2012", yearTo: "2017", yearGraduated: "2017" },
+   803→    ],
+   804→    experiences: [
+   805→      { positionTitle: "Research IT Assistant", employerName: "DOST-ASTI", dateFrom: "2020-06-01", dateTo: "2023-05-31", isGovtService: true, statusOfEmployment: "Contract of Service", monthlySalary: 35000, yearDecimal: 2.9 },
+   806→    ],
+   807→    trainings: [{ title: "Data Analytics Fundamentals", typeOfTraining: "Technical", numberHours: 30, dateFrom: "2023-01-09", dateTo: "2023-01-13" }],
+   808→    eligibilities: [{ title: "Career Service Professional (Second Level)", rating: "86.15", examDate: "2018-08-12", examPlace: "Mandaluyong City" }],
+   809→    submittedDaysAgo: 16,
+   810→  });
+   811→  const paoloSupervised = await ensureDemoApplication(paoloId, srs, "Shortlisted", 6);
+   812→  await ensureDocument(paoloId, "PDS_Paolo_Garcia.pdf", "PDS", "UPLOADED", 12);
+   813→
+   814→  // liza.fernandez — INCOMPLETE profile: the apply-gate / completion demo
+   815→  await ensureDemoApplicant({
+   816→    username: "liza.fernandez", email: emailOf("liza.fernandez"),
+   817→    firstName: "Liza", lastName: "Fernandez",
+   818→    gender: "Female", civilStatus: "Single", birthDate: "1999-12-05", birthPlace: "Marikina City",
+   819→    street: "5 Chorillo St., Barangay Malanday", city: "Marikina City", province: "Metro Manila", zipCode: "1800",
+   820→    mobile: "09175551006",
+   821→    refs: [], educations: [], experiences: [], trainings: [], eligibilities: [],
+   822→    submittedDaysAgo: null,
+   823→  });
+   824→
+   825→  // roberto.dizon — walk-in record WITHOUT a login (admin applicants list demo)
+   826→  const robertoId = await ensureDemoApplicant({
+   827→    email: "roberto.dizon@example.com",
+   828→    firstName: "Roberto", middleName: "Salazar", lastName: "Dizon",
+   829→    gender: "Male", civilStatus: "Widowed", birthDate: "1985-07-19", birthPlace: "Manila",
+   830→    street: "31 Goduco St., Barangay Tondo", city: "Manila", province: "Metro Manila", zipCode: "1012",
+   831→    mobile: "09175551007",
+   832→    refs: [{ name: "Ms. Cita Bautista", title: "Bookkeeping Supervisor", company: "Dizon Enterprises", companyAddress: "Manila", email: "cita.bautista@example.com", contact: "09175551333" }],
+   833→    educations: [
+   834→      { educationLevel: "Vocational / Trade", course: "Bookkeeping NC III", schoolName: "TESDA Women's Center", yearFrom: "2008", yearTo: "2009", yearGraduated: "2009" },
+   835→    ],
+   836→    experiences: [
+   837→      { positionTitle: "Bookkeeping Clerk", employerName: "Dizon Enterprises", dateFrom: "2015-01-05", isPresentWork: true, statusOfEmployment: "Regular", monthlySalary: 21000, yearDecimal: 10.4 },
+   838→    ],
+   839→    trainings: [{ title: "Basic Business Accounting", typeOfTraining: "Non-Technical", numberHours: 16, dateFrom: "2018-03-12", dateTo: "2018-03-13" }],
+   840→    eligibilities: [{ title: "Career Service Sub-Professional (First Level)", rating: "80.40", examDate: "2014-04-06", examPlace: "Manila" }],
+   841→    submittedDaysAgo: 8,
+   842→  });
+   843→  const robertoApplied = await ensureDemoApplication(robertoId, jobAdminFind(), "Applied", 1);
+   844→  await ensureDocument(robertoId, "PDS_Roberto_Dizon.pdf", "PDS", "UPLOADED", 6);
+   845→
+   846→  // maria.santos — complete the MOM story on Administrative Assistant I:
+   847→  // #3 Rejected (with regret letter) then #4 re-applied (active, Applied).
+   848→  await ensureReapplyPair(sampleApplicant.id, jobAdminFind(), 8, "Does not meet the eligibility requirement for this posting.", 2);
+   849→  await ensureDocument(sampleApplicant.id, "PDS_Maria_Santos.pdf", "PDS", "EXTRACTED", 9, 92);
+   850→  await ensureDocument(sampleApplicant.id, "Diploma_BS_Chemistry.pdf", "EDUCATION", "UPLOADED", 9);
+   851→  await ensureDocument(sampleApplicant.id, "Certificates_and_Awards.pdf", "SUPPORTING", "UPLOADED", 8);
+   852→
+   853→  // ── notification ledger (applicant in-app feed) ───────────────────────────
+   854→  const appEmail = (a: number) => db.applicant.findUnique({ where: { id: a } }).then((r) => r?.emailAddress ?? "");
+   855→  const mariaEmail = await appEmail(sampleApplicant.id);
+   856→  const carloEmail = await appEmail(carloId);
+   857→  const anaEmail = await appEmail(anaId);
+   858→  const jamesEmail = await appEmail(jamesId);
+   859→  const graceEmail = await appEmail(graceId);
+   860→  const paoloEmail = await appEmail(paoloId);
+   861→  const robertoEmail = await appEmail(robertoId);
+   862→
+   863→  // Shared notice payloads (same details = the seeded bulk-invitation pair)
+   864→  const interviewDetails: NoticeDetails = {
+   865→    date: "October 21, 2026", time: "9:00 AM", mode: "face_to_face",
+   866→    venue: "Conference Room A, MIRDC Administrative Building",
+   867→    contact: "Ms. Rivera — 8837-0431 loc. 440",
+   868→    notes: "Please bring an original copy of your transcript of records and eligibility. Allow 30 minutes for the panel interview; business attire is requested.",
+   869→  };
+   870→  const examDetails: NoticeDetails = {
+   871→    date: "October 23, 2026", time: "9:00 AM", mode: "face_to_face",
+   872→    venue: "Testing Room 2, Materials and Corrosion Laboratory",
+   873→    contact: "Mr. Dizon — 8837-0431 loc. 441",
+   874→    examType: "Materials Science and Corrosion Fundamentals",
+   875→    notes: "Bring a valid government-issued ID and a pen. The examination runs approximately 90 minutes.",
+   876→  };
+   877→  const onlineInterview: NoticeDetails = {
+   878→    date: "October 20, 2026", time: "2:00 PM", mode: "online",
+   879→    meetingLink: "https://meet.google.com/mirdc-interview-2026",
+   880→    contact: "Ms. Rivera — 8837-0431 loc. 440",
+   881→    notes: "Join the meeting room 10 minutes early. A stable internet connection and a working camera are required.",
+   882→  };
+   883→
+   884→  const jobTitleOf = (j: (typeof jobs)[number] | null | undefined) => j?.title ?? "the position";
+   885→  const nameOf = async (a: number) => {
+   886→    const r = await db.applicant.findUnique({ where: { id: a } });
+   887→    return r ? `${r.firstName} ${r.lastName}` : "Applicant";
+   888→  };
+   889→
+   890→  // Application received — Carlo (SRS I), Roberto (Admin Asst I), James (Electronics), Maria #4 (re-apply)
+   891→  if (carloApplied) {
+   892→    await ensureEmail(carloEmail, emailApplicationReceived(await nameOf(carloId), jobTitleOf(srs1)), carloApplied.id, 2);
+   893→    await ensureSms(carloEmail, smsApplicationReceived(jobTitleOf(srs1)), carloApplied.id, 2);
+   894→    await ensureNotification(carloId, "Application received", `Your application for ${jobTitleOf(srs1)} was received and is awaiting evaluation.`, 2);
+   895→  }
+   896→  if (robertoApplied) {
+   897→    await ensureEmail(robertoEmail, emailApplicationReceived(await nameOf(robertoId), jobTitleOf(jobAdminFind())), robertoApplied.id, 1);
+   898→    await ensureSms(robertoEmail, smsApplicationReceived(jobTitleOf(jobAdminFind())), robertoApplied.id, 1);
+   899→  }
+   900→  if (jamesElecApplied) {
+   901→    await ensureEmail(jamesEmail, emailApplicationReceived(await nameOf(jamesId), jobTitleOf(jobElecFind())), jamesElecApplied.id, 18);
+   902→    await ensureNotification(jamesId, "Application received", `Your application for ${jobTitleOf(jobElecFind())} was received.`, 18);
+   903→  }
+   904→
+   905→  // Under Review — Maria #1, Ana (Electronics)
+   906→  if (carloWithdrawn) {
+   907→    await ensureNotification(carloId, "Application withdrawn", `Your application for ${jobTitleOf(jobAdminFind())} has been withdrawn at your request.`, 9);
+   908→  }
+   909→  {
+   910→    const mariaSrsApp = await db.application.findFirst({ where: { applicantId: sampleApplicant.id, jobId: srs?.id ?? 0, status: "Under Review" } });
+   911→    if (mariaSrsApp) {
+   912→      await ensureEmail(mariaEmail, emailUnderReview(await nameOf(sampleApplicant.id), jobTitleOf(srs)), mariaSrsApp.id, 5);
+   913→      await ensureNotification(sampleApplicant.id, "Application update", `Your application for ${jobTitleOf(srs)} is now Under Review.`, 5);
+   914→    }
+   915→  }
+   916→  if (anaReview) {
+   917→    await ensureEmail(anaEmail, emailUnderReview(await nameOf(anaId), jobTitleOf(jobElecFind())), anaReview.id, 11);
+   918→    await ensureNotification(anaId, "Application update", `Your application for ${jobTitleOf(jobElecFind())} is now Under Review.`, 11);
+   919→  }
+   920→  if (anaWithdrawn) await ensureNotification(anaId, "Application withdrawn", `Your application for ${jobTitleOf(srs)} has been withdrawn at your request.`, 15);
+   921→
+   922→  // Shortlisted + notices — Maria #2 & Grace (SRS I bulk pair), Grace & Paolo (Supervising)
+   923→  const mariaSrs1 = await db.application.findFirst({ where: { applicantId: sampleApplicant.id, jobId: srs1?.id ?? 0, status: "Shortlisted" } });
+   924→  if (mariaSrs1) {
+   925→    await ensureEmail(mariaEmail, emailShortlisted(await nameOf(sampleApplicant.id), jobTitleOf(srs1)), mariaSrs1.id, 3);
+   926→    await ensureSms(mariaEmail, smsStatusChanged("Shortlisted", jobTitleOf(srs1)), mariaSrs1.id, 3);
+   927→    await ensureEmail(mariaEmail, emailInterviewInvitation(await nameOf(sampleApplicant.id), jobTitleOf(srs1), interviewDetails), mariaSrs1.id, 2);
+   928→    await ensureSms(mariaEmail, smsNotice(`Interview invitation: ${jobTitleOf(srs1)} on ${interviewDetails.date} at ${interviewDetails.time}, ${interviewDetails.venue}.`), mariaSrs1.id, 2);
+   929→    await ensureNotification(sampleApplicant.id, "Interview invitation", `Interview invitation sent for ${jobTitleOf(srs1)} — ${interviewDetails.date} at ${interviewDetails.time}.`, 2);
+   930→  }
+   931→  if (graceSrs) {
+   932→    await ensureEmail(graceEmail, emailShortlisted(await nameOf(graceId), jobTitleOf(srs1)), graceSrs.id, 3);
+   933→    await ensureSms(graceEmail, smsStatusChanged("Shortlisted", jobTitleOf(srs1)), graceSrs.id, 3);
+   934→    await ensureEmail(graceEmail, emailInterviewInvitation(await nameOf(graceId), jobTitleOf(srs1), interviewDetails), graceSrs.id, 2);
+   935→    await ensureSms(graceEmail, smsNotice(`Interview invitation: ${jobTitleOf(srs1)} on ${interviewDetails.date} at ${interviewDetails.time}, ${interviewDetails.venue}.`), graceSrs.id, 2);
+   936→    await ensureNotification(graceId, "Interview invitation", `Interview invitation sent for ${jobTitleOf(srs1)} — ${interviewDetails.date} at ${interviewDetails.time}.`, 2);
+   937→  }
+   938→  if (graceSupervised) {
+   939→    await ensureEmail(graceEmail, emailShortlisted(await nameOf(graceId), jobTitleOf(srs)), graceSupervised.id, 7);
+   940→    await ensureEmail(graceEmail, emailSkillsExam(await nameOf(graceId), jobTitleOf(srs), examDetails), graceSupervised.id, 5);
+   941→    await ensureSms(graceEmail, smsNotice(`Skills examination: ${jobTitleOf(srs)} on ${examDetails.date} at ${examDetails.time}, ${examDetails.venue}.`), graceSupervised.id, 5);
+   942→    await ensureNotification(graceId, "Examination notice", `Skills examination notice sent for ${jobTitleOf(srs)} — ${examDetails.date} at ${examDetails.time}.`, 5);
+   943→  }
+   944→  if (paoloSupervised) {
+   945→    await ensureEmail(paoloEmail, emailShortlisted(await nameOf(paoloId), jobTitleOf(srs)), paoloSupervised.id, 6);
+   946→    await ensureEmail(paoloEmail, emailInterviewInvitation(await nameOf(paoloId), jobTitleOf(srs), onlineInterview), paoloSupervised.id, 4);
+   947→    await ensureSms(paoloEmail, smsNotice(`Interview invitation (Online): ${jobTitleOf(srs)} on ${onlineInterview.date} at ${onlineInterview.time}. Meeting link in your email.`), paoloSupervised.id, 4);
+   948→    await ensureNotification(paoloId, "Interview invitation", `Online interview invitation sent for ${jobTitleOf(srs)} — ${onlineInterview.date} at ${onlineInterview.time}.`, 4);
+   949→  }
+   950→
+   951→  // Regret letters (email only — no SMS for the rejected family, spec §9.3)
+   952→  const mariaRejectedApp = await db.application.findFirst({ where: { applicantId: sampleApplicant.id, jobId: jobAdminFind()?.id ?? 0, status: "Rejected" } });
+   953→  if (mariaRejectedApp) {
+   954→    await ensureEmail(mariaEmail, emailRegretLetter(await nameOf(sampleApplicant.id), jobTitleOf(jobAdminFind())), mariaRejectedApp.id, 8);
+   955→    await ensureNotification(sampleApplicant.id, "Application update", `We regret to inform you that you were not shortlisted for ${jobTitleOf(jobAdminFind())}. See your email for the full letter.`, 8);
+   956→  }
+   957→  if (jamesRejectedSrs) {
+   958→    await ensureEmail(jamesEmail, emailRegretLetter(await nameOf(jamesId), jobTitleOf(srs1)), jamesRejectedSrs.id, 10);
+   959→    await ensureNotification(jamesId, "Application update", `We regret to inform you that you were not shortlisted for ${jobTitleOf(srs1)}. See your email for the full letter.`, 10);
+   960→  }
+   961→  // Regret letters for the historical Electronics cycles (idempotent lookups)
+   962→  for (const h of jamesHistorical) {
+   963→    const rejRow = await db.application.findFirst({
+   964→      where: { applicantId: jamesId, jobId: jobElecFind()!.id, status: "Rejected", reason: h.reason },
+   965→    });
+   966→    if (rejRow) await ensureEmail(jamesEmail, emailRegretLetter(await nameOf(jamesId), jobTitleOf(jobElecFind())), rejRow.id, h.daysAgo);
+   967→  }
+   968→
+   969→  // ── audit trail (matches the app's action vocabulary) ─────────────────────
+   970→  await ensureAudit(1, { userId: users["ADMIN"], userLabel: "testadmin (testadmin@mirdc.gov.ph)", userRole: "ADMIN", action: "LOGIN_SUCCESS", entityType: "user", entityId: users["ADMIN"], description: "Signed in from 127.0.0.1" });
+   971→  await ensureAudit(10, { userId: users["ADMIN"], userLabel: "testadmin (testadmin@mirdc.gov.ph)", userRole: "ADMIN", action: "JOB_POSTING_CREATED", entityType: "job", entityId: srs1?.id ?? null, description: `Published job posting "${jobTitleOf(srs1)}"` });
+   972→  await ensureAudit(2, { userId: users["APPLICANT"], userLabel: "carlo.reyes (carlo.reyes@example.com)", userRole: "APPLICANT", action: "APPLICATION_SUBMITTED", entityType: "application", entityId: carloApplied?.id ?? null, description: `Application submitted for ${jobTitleOf(srs1)}` });
+   973→  await ensureAudit(1, { userLabel: "roberto.dizon (roberto.dizon@example.com)", userRole: "APPLICANT", action: "APPLICATION_SUBMITTED", entityType: "application", entityId: robertoApplied?.id ?? null, description: `Application submitted for ${jobTitleOf(jobAdminFind())} (walk-in record)` });
+   974→  await ensureAudit(8, { userLabel: "maria.santos (maria.santos@example.com)", userRole: "APPLICANT", action: "APPLICATION_SUBMITTED", entityType: "application", entityId: mariaRejectedApp?.id ?? null, description: `Application submitted for ${jobTitleOf(jobAdminFind())}` });
+   975→  await ensureAudit(8, { userId: users["EVALUATOR"], userLabel: "testevaluator (testevaluator@mirdc.gov.ph)", userRole: "EVALUATOR", action: "APPLICATION_STATUS_CHANGED", entityType: "application", entityId: mariaRejectedApp?.id ?? null, description: `Application #${mariaRejectedApp?.id ?? "?"} status set to Rejected — ${jobTitleOf(jobAdminFind())}` });
+   976→  await ensureAudit(3, { userId: users["EVALUATOR"], userLabel: "testevaluator (testevaluator@mirdc.gov.ph)", userRole: "EVALUATOR", action: "APPLICATION_STATUS_CHANGED", entityType: "application", entityId: mariaSrs1?.id ?? null, description: `Application #${mariaSrs1?.id ?? "?"} status set to Shortlisted — ${jobTitleOf(srs1)}` });
+   977→  if (mariaSrs1 && graceSrs) {
+   978→    await ensureAudit(2, { userId: users["EVALUATOR"], userLabel: "testevaluator (testevaluator@mirdc.gov.ph)", userRole: "EVALUATOR", action: "NOTICES_BULK_SENT", entityType: "application", entityId: null, description: `Bulk interview invitations sent to 2 shortlisted applicants — ${jobTitleOf(srs1)}` });
+   979→  }
+   980→  if (graceSupervised) {
+   981→    await ensureAudit(5, { userId: users["EVALUATOR"], userLabel: "testevaluator (testevaluator@mirdc.gov.ph)", userRole: "EVALUATOR", action: "NOTICE_SENT", entityType: "application", entityId: graceSupervised.id, description: `Skills examination notice sent — ${jobTitleOf(srs)}` });
+   982→  }
+   983→  await ensureAudit(9, { userLabel: "maria.santos (maria.santos@example.com)", userRole: "APPLICANT", action: "DOCUMENT_UPLOADED", entityType: "document", entityId: null, description: 'Uploaded SUPPORTING document "Certificates_and_Awards.pdf"' });
+   984→  await ensureAudit(30, { userId: users["APPLICANT"], userLabel: "testapplicant (testapplicant@mirdc.gov.ph)", userRole: "APPLICANT", action: "PROFILE_COMPLETED", entityType: "applicant", entityId: 1, description: "Marked profile as complete" });
+   985→
+   986→  // ── contact requests (Settings → Contact Requests) ────────────────────────
+   987→  await ensureContactRequest("Juan Dela Cruz", "juan.delacruz@example.com", "Clarification on eligibility requirements", "Good day! I would like to ask whether a Civil Service Professional eligibility obtained in 2015 is still valid for application to the Science Research Specialist I position. Thank you.", "OPEN", 3);
+   988→  await ensureContactRequest("Pedro Ramos", "pedro.ramos@example.com", "Cannot upload PDF documents", "Hello, I keep receiving an error whenever I try to upload my Personal Data Sheet in the Supporting Documents section. The file is under 10 MB and in PDF format.", "OPEN", 2);
+   989→  await ensureContactRequest("Sofia Reyes", "sofia.reyes@example.com", "Application status inquiry", "Hi, I applied last month and would like to follow up on the status of my application. Thank you very much.", "RESOLVED", 5, 2);
+   990→
+   991→  console.log("Seed complete.");
+   992→  console.log("── Full-flow demo dataset (all accounts use password123) ──");
+   993→  console.log("STAFF");
+   994→  console.log("  testadmin      ADMIN       — dashboard stats, users, email/SMS ledger, audit trail, contact requests");
+   995→  console.log("  testevaluator  EVALUATOR   — queue rows in every stage, ×2 prior-rejection row, bulk cohorts (SRS I ×2, Supervising ×2)");
+   996→  console.log("APPLICANTS (complete profiles, sign in to test)");
+   997→  console.log("  testapplicant  — ZERO applications: run the apply flow from scratch");
+   998→  console.log("  maria.santos   — Under Review (Supervising) · Shortlisted + interview notice (SRS I) · Rejected→re-applied (Admin Asst I) · 3 documents");
+   999→  console.log("  carlo.reyes    — Applied (SRS I) · Withdrawn (Admin Asst I)");
+  1000→  console.log("  ana.lim        — Under Review (Electronics, closed posting) · Withdrawn (Supervising)");
+  1001→  console.log("  james.mendoza  — Rejected (SRS I) · Applied with ×2 prior rejections (Electronics)");
+  1002→  console.log("  grace.villanueva — Shortlisted ×2 (Supervising + SRS I) · exam + interview notices · 2 documents");
+  1003→  console.log("  paolo.garcia   — Shortlisted (Supervising) · ONLINE interview notice with meeting link");
+  1004→  console.log("  liza.fernandez — INCOMPLETE profile: apply gate + completion flow demo");
+  1005→  console.log("  roberto.dizon  — walk-in record WITHOUT a login (admin applicants list)");
+  1006→}
+  1007→
+  1008→main()
+  1009→  .catch((e) => {
+  1010→    console.error(e);
+  1011→    process.exit(1);
+  1012→  })
+  1013→  .finally(() => db.$disconnect());
+  1014→

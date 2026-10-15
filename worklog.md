@@ -546,3 +546,19 @@ Work Log:
 
 Stage Summary:
 - Applicant-facing invitation emails now read exactly like the office's real HR correspondence, including the named signatory block; a one-day multi-stage schedule (interview + assessment) is fully supported end to end (UI → schema → template).
+
+---
+Task ID: 8
+Agent: Z.ai Code (main agent)
+Task: Diagnose user report — "why am I seeing 16 applications on the review queue with same names".
+
+Work Log:
+- Queried db/custom.db directly: Application table holds exactly 16 rows across 7 distinct seeded applicants; group-by (applicantId, jobId) found 13 unique pairs, only 2 of which repeat.
+- Breakdown: Maria Reyes Santos ×4 (Admin Asst I rejected→re-applied, Supervising SRS, SRS I), James Aquino Mendoza ×4 (Electronics Tech rejected ×2→re-applied, SRS I rejected), Ana Lim ×2, Carlo Reyes ×2, Grace Villanueva ×2, Paolo Garcia ×1, Roberto Dizon ×1 (walk-in, no login).
+- Confirmed these are seed-demo rows exercising every pipeline stage + the MOM 2026-10-13 re-application feature — not accidental duplicates.
+- Audited /api/jobs/apply: duplicate gate blocks ACTIVE (applicantId, jobId) pairs with 409 at app level AND re-checks inside the SQLite write transaction, so double-submission cannot create real duplicates.
+- Audited /api/evaluator/queue + review-queue.tsx: no default status filter → the "All" tab intentionally returns all 16 rows including 4 Rejected + 2 Withdrawn, which makes repeated names more visible.
+- Explained to the user with a per-name breakdown and offered optional follow-ups (diversify seed names / default queue to active-only).
+
+Stage Summary:
+- No bug: the 16 rows are 7 demo applicants with multiple applications (different postings) plus two legitimate re-applications after rejection; duplicate submission is properly gated. No code changes made.
