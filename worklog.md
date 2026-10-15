@@ -562,3 +562,22 @@ Work Log:
 
 Stage Summary:
 - No bug: the 16 rows are 7 demo applicants with multiple applications (different postings) plus two legitimate re-applications after rejection; duplicate submission is properly gated. No code changes made.
+
+---
+Task ID: 9
+Agent: Z.ai Code (main agent)
+Task: Review-workspace right rail polish (user QA + screenshot): remove the duplicate "Applied · Awaiting review." banner, enhance rail layout/UI (Credentials on file, Notices, Direct email, History), and color the decision buttons to match their status (Not Qualified = red).
+
+Work Log:
+- Removed stateBanner() and the standalone rail banner — the dossier header already carries the live StatusPill, so the rail now flows Requirements → Credentials → Decision.
+- globals.css: added .dlg-cta-ok / .dlg-cta-bad (solid status-colored CTAs matching the Shortlisted/Rejected pill colors, hover darkens, dark-mode tinted variants) and .dlg-ghost-bad / .dlg-ghost-ok unlayered ghost tokens.
+- buttons.ts: new ctaOkBtn / ctaBadBtn constants; converted ghostBadModifier to the "dlg-ghost-bad" token and added ghostOkModifier ("dlg-ghost-ok").
+- Fixed a pre-existing cascade bug in the process: Tailwind utility overrides (text-[var(--bad)] etc.) appended after .dlg-ghost lost to its unlayered color/background/border — flip buttons and destructive confirms now reliably render their functional color (verified computed styles: rgb(31,122,61) green / rgb(168,67,47) red).
+- Decision card: Start Review = blue CTA, Shortlist = solid green, Not Qualified = solid red (white glyphs); caption reworded to "Decision notices will be emailed to …".
+- CredentialsRow redesigned from 7 wrapping pill chips to a 2-column icon grid (Personal/Education/Work/Training/Eligibility/Awards/Documents), zeros muted, Documents spans full width.
+- Notices + Direct email cards: icon-led meta rows (recipient, "Up to 3 attachments · 5 MB each"), History count pill, icon empty states.
+- Browser-verified as testevaluator: James Mendoza (Applied — colored buttons, no banner), Grace Villanueva (Shortlisted — red Flip to Not Qualified), Maria Santos (Rejected — green Flip to Shortlisted), destructive confirm dialog opened + CANCELLED (no data mutation); desktop 1440×900 and iPhone 14; lint clean; dev.log clean.
+- Committed as 8f26ab4 (globals.css, buttons.ts, review-workspace.tsx).
+
+Stage Summary:
+- The decision rail is visually status-driven end to end: every decision action wears the color of the pipeline stage it produces, the duplicate state banner is gone, and the credentials/notices/email cards read as clean structured cards. All destructive/positive ghost styling is now cascade-proof via unlayered tokens.
