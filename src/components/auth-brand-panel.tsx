@@ -14,18 +14,18 @@
 //     text-stone, ink hairlines) is remapped to white opacities; the .eyebrow
 //     token pins --stone, so the masthead rows restate its typography with
 //     explicit white utilities instead.
-//   · Lockup — the seal rides a small porcelain chip: on photography the
-//     "surface is the elevation" flat rule would sink the black quadrants,
-//     so the chip restores separation (gov.ph photo-header convention).
+//   · Masthead — the panel opens with the gov.ph letterhead rows; the
+//     seal + RMIS-name lockup row and the hiring-portal tagline were retired
+//     per user direction, leaving the motto as the lead display copy under
+//     the letterhead.
 //   · Watermark — the ghosted seal is inverted to porcelain at low opacity,
 //     preserving the official-document watermark convention on the photo.
 //
-// All copy, the fact ledger and the address are unchanged; handlers live in
-// the calling views.
+// The fact ledger and the address are unchanged; handlers live in the
+// calling views.
 // ============================================================================
 
 import { BrandLogo } from "@/components/brand-logo";
-import { RMIS_FULL_NAME } from "@/components/auth-enterprise";
 
 /** Institutional anchors — real citations, no marketing adjectives. */
 const LEDGER: ReadonlyArray<{ label: string; text: string }> = [
@@ -81,20 +81,9 @@ export function AuthBrandPanel() {
       </span>
 
       <div className="relative z-10 flex w-full max-w-[520px] flex-col px-12 pb-6 pt-9 xl:pl-20 xl:pr-16">
-        {/* Lockup — the seal on a porcelain chip (photography needs the
-            separation the flat rule can't give the black quadrants). */}
-        <div className="flex items-center gap-3">
-          <BrandLogo
-            logoSize={34}
-            className="rounded-xl bg-white shadow-[0_1px_3px_rgba(0,0,0,0.35)]"
-          />
-          <span className="min-w-0 text-balance text-left text-lg font-medium leading-tight text-white">
-            {RMIS_FULL_NAME}
-          </span>
-        </div>
-
-        {/* Letterhead — gov.ph masthead convention behind a hairline rule */}
-        <div className="mt-4 border-t border-white/25 pt-4">
+        {/* Letterhead — gov.ph masthead convention behind a hairline rule.
+            Leads the panel since the lockup row was retired (user direction). */}
+        <div className="border-t border-white/25 pt-4">
           <EyebrowRow>Republic of the Philippines</EyebrowRow>
           <EyebrowRow className="mt-1.5">Department of Science and Technology</EyebrowRow>
           <EyebrowRow className="mt-1.5">
@@ -102,17 +91,13 @@ export function AuthBrandPanel() {
           </EyebrowRow>
         </div>
 
-        {/* The agency motto — user-directed display heading. Natural
-            balanced wrap (no forced break): the panel is narrower below xl,
-            and a hard break would widow "future" onto its own line. */}
+        {/* The agency motto — the panel's lead display copy now that the
+            lockup and tagline are retired. Natural balanced wrap (no forced
+            break): the panel is narrower below xl, and a hard break would
+            widow "future" onto its own line. */}
         <h1 className="font-display mt-7 text-[40px] font-medium leading-[1.06] text-balance text-white">
           Molding the future of metal industries.
         </h1>
-
-        <p className="mt-4 text-[15px] leading-relaxed text-white/75">
-          The official hiring portal of MIRDC. Your profile doubles as your Personal Data Sheet —
-          accomplish it once, and every application prefills itself.
-        </p>
 
         {/* Fact ledger — hairline-ruled rows, no icon chips */}
         <dl className="mt-6">

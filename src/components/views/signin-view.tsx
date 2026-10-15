@@ -99,9 +99,9 @@ const DEMO_ACCOUNTS = ["testadmin", "testevaluator", "testapplicant"] as const;
 // identifiers (resend-otp keys on the address, not a username).
 const EMAIL_SHAPE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-// Brand panel (lg+): shared institutional AuthBrandPanel — seal lockup,
-// Republic/DOST/MIRDC letterhead, "Molding the future of metal industries."
-// motto, fact ledger, ghosted-seal watermark.
+// Brand panel (lg+): shared institutional AuthBrandPanel — Republic/DOST/MIRDC
+// letterhead, "Molding the future of metal industries." motto, fact ledger,
+// ghosted-seal watermark (seal lockup + tagline retired per user direction).
 
 type CaptchaConfig = { enabled: boolean; siteKey: string | null };
 
