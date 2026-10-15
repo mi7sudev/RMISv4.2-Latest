@@ -60,9 +60,14 @@
 // with a big match %, an expandable check list and a grounded AI Summary
 // card backed by GET /api/evaluator/applications/[id]/summary; credentials
 // as chips). Every handler, fetch and dialog is unchanged.
+// MOM 2026-10-14 — the BEUI pill navs return as JUMP LINKS directly below
+// the "Work Experience" card: they scroll the stacked dossier to Education /
+// Training / Eligibility / Awards / Documents and their animated pill tracks
+// the section currently in view (scroll-spy), so navigation feels like the
+// old tabs while every card stays visible in the stacked flow.
 // ============================================================================
 
-import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { toast } from "@/lib/toast";
 import {
   AlertTriangle, ArrowUpRight, Award, BadgeCheck, BookOpen, Briefcase, BriefcaseBusiness,
@@ -85,6 +90,7 @@ import {
 // submit lifecycle and the auth-exact useAuthErrors timing.
 import { Input } from "@/components/motion/input";
 import { StatefulButton } from "@/components/motion/button";
+import { Tabs, TabsList, TabsTrigger } from "@/components/motion/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/forms/textarea";
 import { useAuthErrors } from "@/components/forms/field-errors";
@@ -231,10 +237,12 @@ function snapshotDisplayDate(v: unknown): string {
 // ── Candidate-dossier visual kit (reference-matched redesign) ────────────────
 
 /** Plain dossier card (title + optional count pill + body) — the reference
-    design's stacked "About" / "Work Experience" card anatomy. */
-function SectionCard({ title, count, children }: { title: string; count?: number; children: ReactNode }) {
+    design's stacked "About" / "Work Experience" card anatomy. `id` anchors a
+    card for the jump navs below "Work Experience"; the scroll margin keeps a
+    jumped-to card clear of the dialog edge / the mobile sticky header. */
+function SectionCard({ title, count, id, children }: { title: string; count?: number; id?: string; children: ReactNode }) {
   return (
-    <section className="dlg-card p-5">
+    <section id={id} className="dlg-card scroll-mt-20 p-5">
       <div className="flex items-center gap-2">
         <h3 className="text-sm font-semibold text-ink">{title}</h3>
         {typeof count === "number" && (
@@ -243,6 +251,128 @@ function SectionCard({ title, count, children }: { title: string; count?: number
       </div>
       <div className="mt-3">{children}</div>
     </section>
+  );
+}
+
+// ── Dossier jump navs (below "Work Experience") ──────────────────
+// MOM 2026-10-14 — user direction: keep the reference stacked-card dossier,
+// but bring back the pre-redesign BEUI pill navs as jump links. The strip
+// sits directly below the "Work Experience" card and scrolls the dossier to
+// Education / Training / Eligibility / Awards / Documents. The animated pill
+// (official motion Tabs, variant="pill") follows the section currently in
+// view via a scroll-spy, so it navigates like the old tabs without hiding
+// any content.
+
+const SECTION_NAV_ITEMS = [
+  { id: "education", label: "Education", icon: GraduationCap },
+  { id: "training", label: "Training", icon: BookOpen },
+  { id: "eligibility", label: "Eligibility", icon: BadgeCheck },
+  { id: "awards", label: "Awards", icon: Award },
+  { id: "documents", label: "Documents", icon: FileText },
+] as const;
+
+/** Innermost ancestor of `el` with a vertical scrollbar (null → the document
+    itself is the scroller — the full-page evaluator view scrolls the window). */
+function scrollParentOf(el: HTMLElement): HTMLElement | null {
+  let node: HTMLElement | null = el.parentElement;
+  while (node) {
+    const oy = getComputedStyle(node).overflowY;
+    if (oy === "auto" || oy === "scroll") return node;
+    node = node.parentElement;
+  }
+  return null;
+}
+
+function DossierSectionNav({ idPrefix }: { idPrefix: string }) {
+  const ids = useMemo(() => SECTION_NAV_ITEMS.map((s) => `${idPrefix}-${s.id}`), [idPrefix]);
+  const idsRef = useRef(ids);
+  useEffect(() => {
+    idsRef.current = ids;
+  }, [ids]);
+  // Hold the pill on the clicked section for the length of the smooth glide
+  // — the scroll-spy stands down while the pin is live.
+  const pinUntil = useRef(0);
+  const [active, setActive] = useState(ids[0]);
+
+  // Scroll-spy: one rAF-throttled measure pass per scroll frame, computed
+  // from viewport-relative rects so it works for BOTH scrollers — the review
+  // modal's DialogContent and the full-page evaluator window flow.
+  useEffect(() => {
+    const SPY_LINE = 176; // px from the viewport top
+    let raf = 0;
+    const measure = () => {
+      raf = 0;
+      if (Date.now() < pinUntil.current) return;
+      const currentIds = idsRef.current;
+      const lastEl = document.getElementById(currentIds[currentIds.length - 1]);
+      const scroller = lastEl ? scrollParentOf(lastEl) : null;
+      const atBottom = scroller
+        ? scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 4
+        : window.innerHeight + window.scrollY >= (document.documentElement.scrollHeight || 0) - 4;
+      // 1) Classic rule — the card straddling the spy line is the active one.
+      let current = "";
+      for (const id of currentIds) {
+        const el = document.getElementById(id);
+        if (!el) continue;
+        const r = el.getBoundingClientRect();
+        if (r.top <= SPY_LINE && r.bottom > SPY_LINE) {
+          current = id;
+          break;
+        }
+      }
+      // 2) Short-card fallback — the modal's scroll range can run out before
+      //    later cards ever climb to the line (dossiers with few rows), so
+      //    when nothing straddles, the topmost card still on screen wins.
+      //    This keeps the pill advancing card-by-card instead of skipping.
+      if (!current) {
+        for (const id of currentIds) {
+          const el = document.getElementById(id);
+          if (el && el.getBoundingClientRect().bottom > SPY_LINE) {
+            current = id;
+            break;
+          }
+        }
+      }
+      if (!current) current = currentIds[0];
+      // 3) Bottom edge — a short tail can never push the last card up to the
+      //    line, so at the very bottom of the scroll the final section wins.
+      if (atBottom && lastEl && lastEl.getBoundingClientRect().top > SPY_LINE) {
+        current = currentIds[currentIds.length - 1];
+      }
+      setActive(current);
+    };
+    const onScroll = () => {
+      if (!raf) raf = requestAnimationFrame(measure);
+    };
+    measure();
+    window.addEventListener("scroll", onScroll, { capture: true, passive: true });
+    window.addEventListener("resize", onScroll);
+    return () => {
+      if (raf) cancelAnimationFrame(raf);
+      window.removeEventListener("scroll", onScroll, { capture: true });
+      window.removeEventListener("resize", onScroll);
+    };
+  }, []);
+
+  const jump = (id: string) => {
+    setActive(id);
+    pinUntil.current = Date.now() + 1200;
+    document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
+  return (
+    <nav aria-label="Jump to a dossier section">
+      <Tabs variant="pill" value={active} onValueChange={jump}>
+        <TabsList>
+          {SECTION_NAV_ITEMS.map((s, i) => (
+            <TabsTrigger key={s.id} value={ids[i]} className="gap-1.5">
+              <s.icon className="size-3.5" aria-hidden />
+              {s.label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </Tabs>
+    </nav>
   );
 }
 
@@ -1628,6 +1758,10 @@ export function ReviewWorkspace({
   const [regretBusy, setRegretBusy] = useState(false);
   const [emailOpen, setEmailOpen] = useState(false);
   const [previewDoc, setPreviewDoc] = useState<PreviewDoc | null>(null);
+  // Unique anchor prefix for the dossier jump navs — the review modal and the
+  // full-page evaluator view each get their own id scope so their scroll-spies
+  // can never cross-fire.
+  const dossierNavPrefix = `${useId().replace(/[^a-zA-Z0-9_-]/g, "")}-dossier`;
 
   const load = useCallback(
     async (silent = false) => {
@@ -1907,19 +2041,24 @@ export function ReviewWorkspace({
           <SectionCard title="Work Experience" count={payload.snapshots.experiences.length || undefined}>
             <WorkExperienceCard rows={payload.snapshots.experiences} />
           </SectionCard>
-          <SectionCard title="Education" count={payload.snapshots.educations.length || undefined}>
+          {/* MOM 2026-10-14 — jump navs back below "Work Experience": the
+              reference redesign stacked every section, so these pill navs
+              (the pre-redesign BEUI tab look) jump straight to each credential
+              section and their pill follows the scroll. */}
+          <DossierSectionNav idPrefix={dossierNavPrefix} />
+          <SectionCard id={`${dossierNavPrefix}-education`} title="Education" count={payload.snapshots.educations.length || undefined}>
             <EducationCards rows={payload.snapshots.educations} />
           </SectionCard>
-          <SectionCard title="Training" count={payload.snapshots.trainings.length || undefined}>
+          <SectionCard id={`${dossierNavPrefix}-training`} title="Training" count={payload.snapshots.trainings.length || undefined}>
             <TrainingCards rows={payload.snapshots.trainings} />
           </SectionCard>
-          <SectionCard title="Eligibility" count={payload.snapshots.eligibilities.length || undefined}>
+          <SectionCard id={`${dossierNavPrefix}-eligibility`} title="Eligibility" count={payload.snapshots.eligibilities.length || undefined}>
             <EligibilityCards rows={payload.snapshots.eligibilities} />
           </SectionCard>
-          <SectionCard title="Awards" count={payload.snapshots.awards.length || undefined}>
+          <SectionCard id={`${dossierNavPrefix}-awards`} title="Awards" count={payload.snapshots.awards.length || undefined}>
             <AwardCards rows={payload.snapshots.awards} />
           </SectionCard>
-          <SectionCard title="Documents" count={payload.snapshots.documents.length || undefined}>
+          <SectionCard id={`${dossierNavPrefix}-documents`} title="Documents" count={payload.snapshots.documents.length || undefined}>
             {payload.snapshots.documents.length === 0 ? (
               <EmptyNote>No documents uploaded.</EmptyNote>
             ) : (
