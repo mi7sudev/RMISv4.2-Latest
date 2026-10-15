@@ -682,3 +682,19 @@ Work Log:
 Stage Summary:
 - Commit b2dc2bb on top of d2f722e; lint clean; dev server healthy.
 - The Review Queue modal (and the full-page evaluator review view) now has "the same as before" pill navs below Work Experience that jump to Education / Training / Eligibility / Awards / Documents while the stacked reference look is preserved; the animated pill tracks scroll position.
+
+---
+Task ID: 9-h
+Agent: Z.ai Code (main agent)
+Task: Correction to 9-g — the navs below "Work Experience" must SWITCH content (tab behavior): only the selected section's card shows below the strip, default Education.
+
+Work Log:
+- User: "Only the contents of the selected navs will be shown below — at default it is pointed to Education … when i click training, eligibility, awards, documents, only the selected navs will display the contents of it below."
+- Rewrote DossierSectionNav in src/components/views/review-workspace.tsx from a scroll-spy jump nav into a CONTROLLED pill tab nav (value/onValueChange, official motion Tabs variant="pill", icons kept). Removed scrollParentOf, the rAF spy, pin logic, useId anchor scopes, and SectionCard's id/scroll-mt-20 (all 9-g scroll machinery).
+- ReviewWorkspace now holds `dossierTab` state (useState<DossierSectionValue>("education")) and renders ONLY the matching SectionCard below the strip: {dossierTab === "education" && …} etc. About + Work Experience cards stay stacked above the strip; decision rail untouched; DocumentPreviewModal wiring kept (verified: preview opens from the tabbed Documents card).
+- Cleaned imports (useId/useMemo no longer used); updated the MOM 2026-10-14 header + section comments (rev 2: switching, not jumping).
+- Browser verification (agent-browser): default shows only About + Work Experience + Education card; clicking Training/Documents/Eligibility/Awards swaps the card in place on the modal AND the full-page evaluator view (id=14 Roberto Dizon — Documents tab rendered his PDS row and the preview dialog opened); mobile 390px tabs fit, Awards switch works. Screenshots: .verify/9g-tabs-education.png, 9g-tabs-eligibility.png, 9g-fullpage-docs.png, 9g-mobile-awards.png.
+
+Stage Summary:
+- Commit c53f4bc; lint clean; dev log clean; working tree clean.
+- The dossier section navs below "Work Experience" now behave exactly like the pre-redesign capsule tabs (one section visible at a time, default Education) while keeping the reference redesign's stacked About/Work Experience cards and decision rail.
