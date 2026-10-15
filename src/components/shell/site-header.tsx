@@ -19,7 +19,6 @@
 // ============================================================================
 
 import { useSession } from "@/components/session-provider";
-import { BrandLogo } from "@/components/brand-logo";
 import { RMIS_FULL_NAME } from "@/components/auth-enterprise";
 import { navigate, ROLE_HOME, useHashRoute } from "@/lib/router";
 
@@ -43,16 +42,17 @@ export function SiteHeader() {
           className="flex min-h-[44px] items-center gap-3"
           aria-label="RMIS — Recruitment Management Information System home"
         >
-          {/* Official unified brand mark — DOST pinwheel + MIRDC gear crest
-              in a single emblem (see brand-logo). Mounted on the porcelain
-              chip (same convention as the jobs board card and the auth brand
-              panel): on the white capsule the seal's white center square
-              otherwise melts into the surface and the gear crest reads as
-              floating on the pinwheel. The circle chip + hairline border
-              gives the emblem a defined footprint that echoes the pill. */}
-          <BrandLogo
-            logoSize={36}
-            className="rounded-full border border-divider/70 bg-white shadow-[0_1px_2px_rgba(11,24,34,0.08)]"
+          {/* Official header lockup — the COMPLETE two-logo composition from
+              the official artwork (upload/mirdc-logo.png): the plain DOST
+              quatrefoil paired with the MIRDC gear-crest seal, exactly as
+              the agency supplies it. Rendered as one wide image floating on
+              the capsule (transparent background); the single-square seal
+              (MIRDC-mark.png) remains for favicon, rails and cards. */}
+          <img
+            src="/MIRDC-header-logo.png"
+            alt="DOST-MIRDC emblems"
+            style={{ height: 40 }}
+            className="w-auto shrink-0"
           />
           <span className="hidden min-w-0 text-balance text-left text-[15px] font-medium leading-tight tracking-[0.01em] text-ink sm:block">
             {RMIS_FULL_NAME}
