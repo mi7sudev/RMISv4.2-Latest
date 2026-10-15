@@ -22,7 +22,7 @@ changes reproduces the previous behavior exactly.
 | Area | Before | After |
 |---|---|---|
 | `/iotOperatorsDetails`, `/get-pms-cmms`, `/bmisSupplierDetails`, `/iotmiddleware` | — | **byte-identical** (untouched) |
-| `/sendMail` request | `{system, to, cc, bcc, from, subject, message, html}` | same, **plus optional** `text` (plain-text part) and `attachments: [{filename, content(base64), contentType?}]` (10 MB cap) |
+| `/sendMail` request | `{system, to, cc, bcc, from, subject, message, html}` | same, **plus optional** `text` (plain-text part), `attachments: [{filename, content(base64), contentType?}]` (10 MB cap), and `replyTo` (Task 14 — explicit Reply-To, wins over `from`) |
 | `/sendMail` response 200 | `{message, defaultReplyTo}` | same keys, **plus** `messageId`, `accepted`, `rejected` |
 | Missing `to` | 500 from inside nodemailer | clear **400** "Missing or invalid to recipient" |
 | Failure logging to the log service | dead code (never ran) | actually posts `{system, email, send_status:"error not send"}` — same payload shape as the success log |
@@ -31,8 +31,9 @@ changes reproduces the previous behavior exactly.
 | SMTP/log credentials | hardcoded | same defaults, overridable via `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `LOG_URL`, `LOG_TOKEN` |
 | JSON body limit | 100 KB (express default) | 12 MB (needed for attachments; tiny legacy bodies unaffected) |
 
-The From header rule is unchanged: `"<system>" <systems@mirdc.dost.gov.ph>`,
-and `body.from` still becomes the Reply-To header.
+The From header rule is unchanged: `"<system>" <systems@mirdc.dost.gov.ph>`.
+The Reply-To header resolves as `body.replyTo` (new, Task 14) → `body.from`
+(legacy) → absent (replies land in the SMTP account).
 
 ## Why RMIS needs these additions
 
@@ -44,6 +45,13 @@ readable fallback. `system` is set to "DOST-MIRDC Recruitment" so the From
 line reads `«DOST-MIRDC Recruitment» <systems@mirdc.dost.gov.ph>`. RMIS
 also sends `api` (the shared token) — harmless today, and it future-proofs
 the call if the VM ever enables `MIDDLEWARE_API_KEY` strict mode.
+
+**Task 14 (2026-10):** RMIS now also sends
+`replyTo: "MIRDC HR Office" <recruitment@mirdc.dost.gov.ph>` on every
+message, so applicant replies reach the recruitment mailbox instead of the
+system mailer. Deploy this updated `index.js` to the VM (or verify the
+deployed one honors `body.replyTo`) and send a test notice — the received
+mail must show `Reply-To: "MIRDC HR Office" <recruitment@mirdc.dost.gov.ph>`.
 
 ## RMIS-side configuration (on the RMIS host, NOT this VM)
 

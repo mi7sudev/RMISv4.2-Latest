@@ -69,7 +69,8 @@ Rules learned the hard way:
 ### 0.4 Email relay (mirdc_middleware)
 
 - Runs on the Windows VM at **`http://10.10.120.43:3232`** — updated `index.js` deployed and smoke-tested 2026-09-29 (`GET /health` → `{"status":"ok"}`).
-- RMIS → relay contract: `POST /sendMail` with `{ api: ⟨shared token⟩, system: "DOST-MIRDC Recruitment", to, subject, message: ⟨RAW HTML⟩ }` — never send an `html` object (switches the relay into its EJS template that HTML-escapes branded markup); omit `from` so Reply-To stays `systems@mirdc.dost.gov.ph`; relay sends HTML only (wrap plain-text sends in `<br>`); relay auto-logs every send to the central IT log service (`10.10.120.43:1404`).
+- RMIS → relay contract: `POST /sendMail` with `{ api: ⟨shared token⟩, system: "DOST-MIRDC Recruitment", to, subject, message: ⟨RAW HTML⟩ }` — never send an `html` object (switches the relay into its EJS template that HTML-escapes branded markup); relay sends HTML only (wrap plain-text sends in `<br>`); relay auto-logs every send to the central IT log service (`10.10.120.43:1404`).
+- **Reply-To (Task 14, 2026-10):** RMIS now sends `from: "MIRDC HR Office" <recruitment@mirdc.dost.gov.ph>` (MOM 2026-10-13) AND `replyTo: "MIRDC HR Office" <recruitment@mirdc.dost.gov.ph>` on every message — applicant replies must land in the **recruitment** mailbox, not the system mailer. The relay MUST pass `replyTo` through to nodemailer (a plain `transporter.sendMail(req.body)` passthrough does this). **Verify on the VM after deploy:** send one notice and confirm the received mail's `Reply-To:` header is `recruitment@mirdc.dost.gov.ph`; if the relay pins its own Reply-To (`systems@…`), update the relay's `index.js` (drop-in lives in `deploy/mirdc_middleware/`) to honor `req.body.replyTo`. Override the address with `EMAIL_REPLY_TO` in `.env` if the office ever routes replies elsewhere.
 - Optional hardening (not yet enabled): set `MIDDLEWARE_API_KEY` on the VM to make auth strict — confirm no other consumer breaks first.
 
 ### 0.4b Document extraction architecture (which parts need AI)
@@ -223,6 +224,10 @@ EMAIL_PROVIDER=middleware
 EMAIL_MIDDLEWARE_URL="http://⟪middleware-vm-ip⟫:3232"
 EMAIL_MIDDLEWARE_API_KEY="⟪shared middleware token (body.api)⟫"
 EMAIL_MIDDLEWARE_SYSTEM="DOST-MIRDC Recruitment"
+# Task 14 — applicant email replies are routed here via the Reply-To header
+# (default recruitment@mirdc.dost.gov.ph). Override ONLY if the office wants
+# replies to land elsewhere.
+# EMAIL_REPLY_TO="recruitment@mirdc.dost.gov.ph"
 #
 # OPTION B (Resend HTTP API — free tier 100/day):
 # EMAIL_PROVIDER=resend

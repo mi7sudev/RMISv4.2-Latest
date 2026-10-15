@@ -2,6 +2,11 @@
 // RMIS — Seed script (spec §15): RBAC-free normalized schema; demo accounts,
 // reference data, positions + postings, sample applicants + applications
 // across pipeline stages. Run: npx tsx prisma/seed.ts (or bun prisma/seed.ts)
+// Task 14 (production prep): the seed writes DEMO accounts (testadmin /
+// testevaluator / testapplicant, password123) and sample applicants — it must
+// NEVER touch a production database. It now refuses to run unless the DEMO
+// guard is explicit: set ALLOW_DEMO_SEED=1 (dev/sandbox convenience), or the
+// run aborts before a single row is written.
 // ============================================================================
 
 import { PrismaClient } from "@prisma/client";
@@ -27,6 +32,23 @@ import {
 const db = new PrismaClient();
 
 async function main() {
+  // ── Production guard (Task 14) ──────────────────────────────────────────
+  // Demo credentials must never exist outside development. Abort unless the
+  // operator opted in explicitly.
+  if (process.env.ALLOW_DEMO_SEED !== "1") {
+    console.error(
+      "\n✖ Refusing to seed: this script writes DEMO accounts (testadmin/testevaluator/" +
+        "testapplicant — password123) and sample applicants/postings.\n" +
+        "  Point production at a clean database and create real staff accounts instead.\n" +
+        "  (Developers: re-run with ALLOW_DEMO_SEED=1 to seed a development database.)\n"
+    );
+    process.exit(1);
+  }
+  if (process.env.NODE_ENV === "production") {
+    console.error("\n✖ Refusing to seed: NODE_ENV=production. Demo data is never for production.\n");
+    process.exit(1);
+  }
+
   console.log("Seeding RMIS…");
 
   // ── Reference data ────────────────────────────────────────────────────────

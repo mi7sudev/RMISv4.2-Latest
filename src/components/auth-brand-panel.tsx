@@ -18,14 +18,13 @@
 //     seal + RMIS-name lockup row and the hiring-portal tagline were retired
 //     per user direction, leaving the motto as the lead display copy under
 //     the letterhead.
-//   · Watermark — the ghosted seal is inverted to porcelain at low opacity,
-//     preserving the official-document watermark convention on the photo.
+//   · Watermark — RETIRED (Task 14, production prep): the ghosted seal
+//     watermark is gone; the photographic backdrop + scrim carry the panel
+//     on their own.
 //
 // The fact ledger and the address are unchanged; handlers live in the
 // calling views.
 // ============================================================================
-
-import { BrandLogo } from "@/components/brand-logo";
 
 /** Institutional anchors — real citations, no marketing adjectives. */
 const LEDGER: ReadonlyArray<{ label: string; text: string }> = [
@@ -69,16 +68,6 @@ export function AuthBrandPanel() {
             "linear-gradient(112deg, rgba(11,24,34,0.93) 0%, rgba(11,24,34,0.78) 36%, rgba(11,24,34,0.48) 66%, rgba(11,24,34,0.30) 100%)",
         }}
       />
-
-      {/* Ghosted seal — official-document watermark, inverted to porcelain so
-          it registers on the photographic ground (decorative). Anchored PAST
-          the panel's bottom-right corner; overflow-hidden crops the rest. */}
-      <span
-        aria-hidden="true"
-        className="pointer-events-none absolute -bottom-52 -right-14 select-none opacity-[0.08] invert"
-      >
-        <BrandLogo logoSize={500} />
-      </span>
 
       <div className="relative z-10 flex w-full max-w-[520px] flex-col px-12 pb-6 pt-9 xl:pl-20 xl:pr-16">
         {/* Letterhead — gov.ph masthead convention behind a hairline rule.

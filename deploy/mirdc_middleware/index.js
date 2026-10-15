@@ -249,6 +249,7 @@ app.post("/iotmiddleware", async (req, res) => {
 //     system:  "SystemName"                       → From display name
 //     to:      "a@x.com"                          (cc / bcc also accepted)
 //     from:    "reply-to@x.com"                   → becomes the Reply-To header
+//     replyTo: "MIRDC HR Office" <recruitment@…>  → Reply-To, wins over `from`
 //     subject: "..."
 //     message: "<p>html body</p>"                 → used when "html" is absent
 //     html:    { message, url:{link,text}, ... }  → renders send-mail.html
@@ -316,9 +317,18 @@ app.post("/sendMail", async (req, res) => {
 
         const defaultReplyTo = `"${req.body.system || 'IT HelpDesk'}" <${SMTP_USER}>`
 
+        // Task 14 (RMIS production) — REPLY-TO resolution:
+        //   1. explicit req.body.replyTo  (RMIS sends "MIRDC HR Office" <recruitment@mirdc.dost.gov.ph>)
+        //   2. legacy req.body.from       (the old contract's reply-to slot)
+        //   3. none                       → replies land in the SMTP account (systems@…)
+        // From ALWAYS stays the SMTP account (deliverability: SPF/DKIM/DMARC
+        // are aligned to systems@…); the Reply-To header is what routes
+        // applicant replies to the recruitment mailbox.
+        const effectiveReplyTo = req.body.replyTo || req.body.from || null;
+
         const info = await transporter.sendMail({
             from: defaultReplyTo,
-            replyTo: req.body.from,
+            ...(effectiveReplyTo ? { replyTo: effectiveReplyTo } : {}),
             to: req.body.to,
             cc: req.body.cc,
             bcc: req.body.bcc,

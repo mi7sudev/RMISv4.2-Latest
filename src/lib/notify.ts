@@ -39,6 +39,14 @@ const EMAIL_MIDDLEWARE_SYSTEM = (process.env.EMAIL_MIDDLEWARE_SYSTEM || "").trim
 // middleware relay still owns the SMTP session.
 export const RECRUITMENT_EMAIL_ADDRESS = (process.env.EMAIL_FROM || "recruitment@mirdc.dost.gov.ph").trim();
 export const RECRUITMENT_SENDER_NAME = "MIRDC HR Office";
+// Task 14 (production) — REPLY-TO: production middlewares pin the From to
+// the SMTP account (systems@…), so applicant replies currently land in the
+// system mailer's inbox. Every outgoing message now carries an explicit
+// Reply-To of the recruitment mailbox — applicant replies are forwarded to
+// recruitment@mirdc.dost.gov.ph regardless of which account actually owns
+// the SMTP session. Override with EMAIL_REPLY_TO if the office ever wants
+// a different catch-all.
+export const RECRUITMENT_REPLY_TO = (process.env.EMAIL_REPLY_TO || "recruitment@mirdc.dost.gov.ph").trim();
 
 // ---------------------------------------------------------------------------
 // Provider introspection — used by the admin Email panel to show the ACTIVE
@@ -125,6 +133,10 @@ export async function sendEmail(input: EmailInput): Promise<SendResult> {
             // MOM 2026-10-13 — send as the recruitment mailbox. Middlewares
             // that pin the From to the office mailbox ignore this field.
             from: `"${RECRUITMENT_SENDER_NAME}" <${RECRUITMENT_EMAIL_ADDRESS}>`,
+            // Task 14 — applicant replies MUST reach the recruitment mailbox
+            // even when the middleware rewrites From to its SMTP account;
+            // nodemailer passes this straight through to the Reply-To header.
+            replyTo: `"${RECRUITMENT_SENDER_NAME}" <${RECRUITMENT_REPLY_TO}>`,
             to: input.to,
             subject: input.subject,
             message,
@@ -166,6 +178,8 @@ export async function sendEmail(input: EmailInput): Promise<SendResult> {
             from: process.env.EMAIL_FROM || `${RECRUITMENT_SENDER_NAME} <${RECRUITMENT_EMAIL_ADDRESS}>`,
             to: [input.to],
             subject: input.subject,
+            // Task 14 — Resend's reply-to field (list or single address).
+            reply_to: RECRUITMENT_REPLY_TO,
             text: input.bodyText,
             html: input.bodyHtml,
           }),
@@ -196,6 +210,8 @@ export async function sendEmail(input: EmailInput): Promise<SendResult> {
           body: JSON.stringify({
             to: input.to,
             subject: input.subject,
+            // Task 14 — legacy contract: harmless when the gateway ignores it.
+            replyTo: RECRUITMENT_REPLY_TO,
             text: input.bodyText,
             html: input.bodyHtml ?? input.bodyText,
           }),

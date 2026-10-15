@@ -2,7 +2,7 @@
 
 // ============================================================================
 // RMIS — Sign-in view (spec §3.3, §7.3): identifier (email or username) +
-// password, demo account chips, welcome toast → session refresh → role home.
+// password, welcome toast → session refresh → role home.
 // BEUI Phase 4 + Task 24: there is no official BEUI sign-in block in the
 // registry (beui.dev/r/registry.json — only signup-form exists), so the form
 // is COMPOSED from the official BEUI primitives, used unmodified, inside the
@@ -54,17 +54,17 @@
 // classic sign-in pattern; the label row is rendered here because the
 // official Input's label prop is string-only and vendored), the cross-link
 // to sign-up becomes a proper in-card footer line ("New to RMIS? Create an
-// account" — mirroring the sign-up card's footer), the redundant
+// account" — mirroring the sign-up card's footer) and the redundant
 // "Back to vacant positions" link is dropped (the site header owns that
-// navigation), and the demo quick-fill is restyled as a quiet fog panel in
-// the same visual family as the trust strip. All handlers, API calls,
-// validation and copy are preserved exactly.
+// navigation). Task 14 (production prep): the demo quick-fill panel is
+// REMOVED — no seeded credential hints ship with the public login page.
+// All handlers, API calls, validation and copy are preserved exactly.
 // ============================================================================
 
 import { cancelBtn } from "@/components/ui/buttons";
 import { useEffect, useId, useRef, useState } from "react";
 import type { FormEvent } from "react";
-import { Check, Eye, EyeOff, Lock, Mail } from "lucide-react";
+import { Eye, EyeOff, Lock, Mail } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { toast } from "@/lib/toast";
 import { Input } from "@/components/motion/input";
@@ -93,15 +93,14 @@ import { BEUI_FIELD_FILL } from "./profile/beui-form";
 import { navigate, ROLE_HOME } from "@/lib/router";
 import { cn } from "@/lib/utils";
 
-const DEMO_ACCOUNTS = ["testadmin", "testevaluator", "testapplicant"] as const;
-
 // Task 30-b — the resend affordance is offered only for email-shaped
 // identifiers (resend-otp keys on the address, not a username).
 const EMAIL_SHAPE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 // Brand panel (lg+): shared institutional AuthBrandPanel — Republic/DOST/MIRDC
-// letterhead, "Molding the future of metal industries." motto, fact ledger,
-// ghosted-seal watermark (seal lockup + tagline retired per user direction).
+// letterhead, "Molding the future of metal industries." motto, fact ledger
+// (seal lockup + tagline retired per user direction; watermark retired for
+// production).
 
 type CaptchaConfig = { enabled: boolean; siteKey: string | null };
 
@@ -438,50 +437,10 @@ export default function SignInView() {
           </form>
 
           {/* Official-use trust strip — the government-portal convention,
-              shared by every auth page (session/audit variant here) */}
+              shared by every auth page (session/audit variant here). Task 14
+              (production prep): the demo quick-fill panel that used to sit
+              under it is gone — no credential hints on the public login. */}
           <AuthSecureStrip className="mt-4" />
-
-          {/* Demo access (form polish pass) — a quiet fog panel in the SAME
-              visual family as the trust strip above: eyebrow + credential
-              hint, compact quick-fill chips, the network note. Replaces the
-              old loose border-t section + stray link row. */}
-          <div className="mt-4 rounded-2xl border border-border/70 bg-fog/60 px-4 py-3.5">
-            <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-              <p className="eyebrow">Demo access</p>
-              <p className="text-[11px] font-medium text-stone">Password: password123</p>
-            </div>
-            <div className="mt-2.5 flex flex-wrap gap-2">
-              {DEMO_ACCOUNTS.map((name) => {
-                const selected = identifier === name && password === "password123";
-                return (
-                  <button
-                    key={name}
-                    type="button"
-                    aria-pressed={selected}
-                    onClick={() => {
-                      setIdentifier(name);
-                      setPassword("password123");
-                      resetStatus();
-                      setFormError(undefined);
-                    }}
-                    className={cn(
-                      "inline-flex min-h-9 items-center gap-1.5 rounded-full px-3.5 text-xs font-medium transition-all duration-150",
-                      selected
-                        ? "dlg-cta"
-                        : "border border-border bg-white/80 text-ink hover:border-foreground/30 hover:bg-white"
-                    )}
-                  >
-                    {selected && <Check className="h-3.5 w-3.5" aria-hidden="true" />}
-                    {name}
-                  </button>
-                );
-              })}
-            </div>
-            <p className="mt-2.5 text-[11px] leading-relaxed text-stone">
-              Staff accounts are restricted to the MIRDC intranet; applicants can sign in from any
-              network.
-            </p>
-          </div>
         </div>
       </div>
 
