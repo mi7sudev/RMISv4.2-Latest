@@ -285,6 +285,21 @@ export const noticeSchema = z.object({
   examType: optStr(120),
   mode: z.enum(["face_to_face", "online"]).optional(),
   meetingLink: optStr(500),
+  // The office's real hiring emails run a ONE-DAY, MULTI-STAGE schedule
+  // (e.g. 1. Face-to-face Interview 12:30 PM, 2. Psychological Assessment
+  // 1:00 PM–3:00 PM). Stage 1 comes from the main date/time/venue fields;
+  // `extraStages` carries stages 2..N. Two+ stages switch the invitation
+  // email to the "next stages / one-day process" template.
+  extraStages: z
+    .array(
+      z.object({
+        title: z.string().trim().min(1, "Stage title is required.").max(160),
+        time: optStr(80),
+        venue: optStr(200),
+      })
+    )
+    .max(5)
+    .optional(),
 });
 
 /** MOM 2026-10-13 — bulk interview/exam invitations to shortlisted applicants

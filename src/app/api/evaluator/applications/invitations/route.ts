@@ -108,7 +108,11 @@ export const POST = handleApi(async (req: Request) => {
       [profile?.firstName || app.applicant.firstName, profile?.lastName || app.applicant.lastName]
         .filter(Boolean)
         .join(" ") || "Applicant";
-    const title = app.job.position?.positionTitle || app.job.title;
+    // The office's real emails cite the position WITH its item number.
+    const pos = app.job.position;
+    const title = pos?.positionTitle
+      ? `${pos.positionTitle}${pos.itemNumber ? ` (${pos.itemNumber})` : ""}`
+      : app.job.title;
 
     const details = {
       date: input.date,
@@ -119,6 +123,24 @@ export const POST = handleApi(async (req: Request) => {
       examType: input.type === "skills_exam" ? input.examType ?? undefined : undefined,
       mode,
       meetingLink: input.meetingLink ?? undefined,
+      // One-day process: stage 1 from the main fields, 2..N from extraStages.
+      stages: [
+        {
+          title:
+            input.type === "interview"
+              ? mode === "online"
+                ? "Online Interview"
+                : "Face-to-face Interview"
+              : `Skills Examination${input.examType ? ` — ${input.examType}` : ""}`,
+          time: input.time,
+          venue: input.venue ?? undefined,
+        },
+        ...(input.extraStages ?? []).map((s) => ({
+          title: s.title,
+          time: s.time || undefined,
+          venue: s.venue || undefined,
+        })),
+      ],
     };
 
     const template =

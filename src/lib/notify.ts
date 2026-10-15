@@ -321,15 +321,90 @@ function textToSimpleHtml(text: string): string {
   return `<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.6;color:#1a1a1a;">${paras}</div>`;
 }
 
-function emailShell(title: string, bodyHtml: string): string {
+function emailShell(title: string, bodyHtml: string, opts?: { official?: boolean }): string {
+  // Official edition (HR notices) — the footer carries the agency office
+  // lockup instead of the "do not reply" sentence: these invitations ask the
+  // applicant to confirm BY REPLYING, so a no-reply footer contradicted the
+  // body (caught against the office's real interview emails).
+  const footer = opts?.official
+    ? `<p style="margin:0 0 2px;font-size:12px;font-weight:bold;color:#181825;">DOST-MIRDC · Metals Industry Research and Development Center</p>
+       <p style="margin:0;font-size:11px;color:#949494;">Department of Science and Technology · MIRDC Complex, Gen. Santos Avenue, Bicutan, Taguig City</p>`
+    : `<p style="margin:0;font-size:11px;color:#949494;">This is an automated message from RMIS (Recruitment Management Information System). Please do not reply.</p>`;
   return `<!doctype html><html><body style="margin:0;padding:0;background:#f7f7f7;font-family:Arial,Helvetica,sans-serif;">
   <div style="max-width:560px;margin:24px auto;background:#ffffff;border-radius:16px;padding:32px;">
     <p style="margin:0 0 4px;font-size:11px;letter-spacing:1px;color:#949494;text-transform:uppercase;">DOST-MIRDC · Recruitment</p>
     <h1 style="margin:0 0 16px;font-size:22px;color:#181825;">${title}</h1>
     ${bodyHtml}
     <hr style="border:none;border-top:1px solid #eee;margin:24px 0 12px;" />
-    <p style="margin:0;font-size:11px;color:#949494;">This is an automated message from RMIS (Recruitment Management Information System). Please do not reply.</p>
+    ${footer}
   </div></body></html>`;
+}
+
+// ── Official HR signature block (the office's real interview emails) ────────
+// The office sends notices over a named signatory, not a department alias.
+// Every line is env-overridable so the VM deployment can re-point it without
+// a code change; the defaults are the office's current signatory of record.
+function hrEnv(key: string, fallback: string): string {
+  const v = (process.env[key] || "").trim();
+  return v || fallback;
+}
+
+function hrSignatureText(): string {
+  const lines = [
+    hrEnv("RMIS_HR_SIGNATORY", "DOLLY MARIE T. BORLADO"),
+    hrEnv("RMIS_HR_SIGNATORY_POSITION", "Administrative Officer IV"),
+    hrEnv("RMIS_HR_DIVISION", "Finance and Administrative Division"),
+    hrEnv("RMIS_HR_UNIT", "HRMASS-PAU"),
+    hrEnv("RMIS_HR_TELEPHONE", "Local 441, Tel No: 8837-0431 to 38"),
+  ];
+  return lines.join("\n");
+}
+
+function hrSignatureHtml(): string {
+  const lines = [
+    hrEnv("RMIS_HR_SIGNATORY", "DOLLY MARIE T. BORLADO"),
+    hrEnv("RMIS_HR_SIGNATORY_POSITION", "Administrative Officer IV"),
+    hrEnv("RMIS_HR_DIVISION", "Finance and Administrative Division"),
+    hrEnv("RMIS_HR_UNIT", "HRMASS-PAU"),
+    hrEnv("RMIS_HR_TELEPHONE", "Local 441, Tel No: 8837-0431 to 38"),
+  ];
+  return `<p style="color:#484758;font-size:14px;line-height:1.6;">${lines
+    .map((l, i) => (i === 0 ? `<strong>${escHtml(l)}</strong>` : escHtml(l)))
+    .join("<br/>")}</p>`;
+}
+
+// ── Schedule value formatting (the office's real emails) ────────────────────
+// The dialog's date input yields ISO "2026-07-30"; the office renders dates
+// as "July 30, 2026 (Thursday)". Times from the time input yield 24-hour
+// "13:00"; the office renders "1:00 PM". Anything already typed as display
+// text passes through untouched.
+const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+function noticeDateLabel(raw: string | undefined): string {
+  const v = (raw || "").trim();
+  const iso = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v);
+  if (iso) {
+    const [, y, m, d] = iso;
+    const dt = new Date(Number(y), Number(m) - 1, Number(d));
+    if (!Number.isNaN(dt.getTime())) {
+      return `${MONTHS[dt.getMonth()]} ${dt.getDate()}, ${dt.getFullYear()} (${WEEKDAYS[dt.getDay()]})`;
+    }
+  }
+  return v || "TBA";
+}
+
+function noticeTimeLabel(raw: string | undefined): string {
+  const v = (raw || "").trim();
+  const hhmm = /^(\d{1,2}):(\d{2})$/.exec(v);
+  if (hhmm) {
+    let h = Number(hhmm[1]);
+    const m = hhmm[2];
+    const ap = h >= 12 ? "PM" : "AM";
+    h = h % 12 || 12;
+    return `${h}:${m} ${ap}`;
+  }
+  return v || "TBA";
 }
 
 export function emailApplicationReceived(applicantName: string, jobTitle: string) {
@@ -415,7 +490,11 @@ export function emailRegretLetter(applicantName: string, jobTitle: string) {
 
 /** Notice schedule details — MOM 2026-10-13 adds the setup mode (face-to-face
  *  or online with a meeting link) and renames "Notes" to "Invitation
- *  Details" (long text, no character limit). */
+ *  Details" (long text, no character limit). The office's real hiring emails
+ *  also run a ONE-DAY, MULTI-STAGE schedule (e.g. interview at 12:30 PM,
+ *  psychological assessment at 1:00 PM) — `stages` carries the numbered
+ *  blocks; when it holds 2+ entries the invitation switches to the "next
+ *  stages" template. */
 export type NoticeDetails = {
   date?: string;
   time?: string;
@@ -425,13 +504,14 @@ export type NoticeDetails = {
   examType?: string;
   mode?: "face_to_face" | "online";
   meetingLink?: string;
+  stages?: { title: string; time?: string; venue?: string }[];
 };
 
 function noticeScheduleLines(d: NoticeDetails, kindLabel: string): string[] {
   const online = d.mode === "online";
   const lines = [
-    `Date: ${d.date || "TBA"}`,
-    `Time: ${d.time || "TBA"}`,
+    `Date: ${noticeDateLabel(d.date)}`,
+    `Time: ${noticeTimeLabel(d.time)}`,
     `${kindLabel} Mode: ${online ? "Online" : "Face-to-Face"}`,
   ];
   if (online) {
@@ -444,40 +524,174 @@ function noticeScheduleLines(d: NoticeDetails, kindLabel: string): string[] {
   return lines;
 }
 
+/** Rows for the HTML schedule table (label/value pairs). */
+function noticeScheduleRows(d: NoticeDetails, kindLabel: string): [string, string][] {
+  return noticeScheduleLines(d, kindLabel).map((l) => {
+    const i = l.indexOf(":");
+    return [l.slice(0, i), l.slice(i + 1).trim()] as [string, string];
+  });
+}
+
+/** Stage block rows for the multi-stage (one-day process) template. */
+function stageLines(s: { title: string; time?: string; venue?: string }, online?: boolean): string[] {
+  const lines: string[] = [];
+  if (s.time) lines.push(`Time: ${noticeTimeLabel(s.time)}`);
+  if (s.venue) lines.push(`Venue: ${s.venue}`);
+  if (online && lines.length === 0) lines.push("Details to follow");
+  return lines;
+}
+
+// ── Invitation templates — matched to the office's REAL interview emails ───
+// (upload samples, Jul/Sep 2026): "Dear Applicant:" greeting; the position
+// carries its item number; the schedule block reads Date/Time/Mode/Venue;
+// a one-PDF-file instruction paragraph; the confirm-by-reply paragraph with
+// the automatic-removal clause; "Thank you very much!"; the named HR
+// signatory block; an official footer (these invites DO accept replies).
+// When the details carry 2+ stages, the template switches to the office's
+// "next stages / one-day process" edition (interview + psychological
+// assessment etc.) with the IMPORTANT REMINDER + work-suspension clauses.
+
+const PDF_INSTRUCTION_INTERVIEW =
+  "To facilitate the evaluation process, please ensure that your application documents are updated, complete, and compiled into one (1) PDF file before your scheduled interview.";
+const CONFIRM_ATTENDANCE =
+  "Kindly confirm your attendance by replying to this email. Please note that failure to attend the scheduled interview will result in the automatic removal of your name from the shortlist.";
+
+function multiStageNotice(applicantName: string, jobTitle: string, d: NoticeDetails): { bodyText: string; bodyHtml: string } | null {
+  const stages = (d.stages ?? []).filter((s) => s.title.trim());
+  if (stages.length < 2) return null;
+  const row = (k: string, v: string) => `<tr><td style="padding:6px 12px 6px 0;color:#949494;font-size:13px;">${escHtml(k)}</td><td style="padding:6px 0;color:#181825;font-size:14px;">${escHtml(v)}</td></tr>`;
+
+  const stageText = stages
+    .map((s, i) => {
+      const head = `${i + 1}. ${s.title.trim()}`;
+      const lines = stageLines(s).map((l) => `   ${l}`);
+      return [head, ...lines].join("\n");
+    })
+    .join("\n\n");
+  const stageHtml = stages
+    .map((s, i) => {
+      const rows = stageLines(s)
+        .map((l) => {
+          const c = l.indexOf(":");
+          return row(l.slice(0, c), l.slice(c + 1).trim());
+        })
+        .join("");
+      return `<p style="margin:14px 0 4px;color:#181825;font-size:14px;line-height:1.6;"><strong>${escHtml(`${i + 1}. ${s.title.trim()}`)}</strong></p>${rows ? `<table style="margin:0 0 8px;">${rows}</table>` : ""}`;
+    })
+    .join("");
+
+  const bodyText = `Dear Applicant:
+
+Good day!
+
+We are pleased to invite you to the next stages of the recruitment process for the ${jobTitle} position. Kindly take note of the following schedule and details:
+
+Date: ${noticeDateLabel(d.date)}
+
+${stageText}${d.notes ? `\n\n${d.notes}` : ""}
+
+IMPORTANT REMINDER: This will be a one-day process. Please be advised that no alternate schedule will be provided, as the position is urgently needed. Failure to attend the scheduled interview will result in automatic removal from the shortlist, unless a prior request for rescheduling has been submitted and approved by the MIRDC Selection Board.
+
+Kindly confirm your availability for the abovementioned interview and assessment, by replying to this email. Should there be an official issuance of work suspension on the said date, the interview will be rescheduled accordingly, and you will be notified of the new schedule.
+
+Thank you.
+
+${hrSignatureText()}`;
+
+  const bodyHtml = emailShell(
+    "Interview and assessment invitation",
+    `<p style="color:#484758;font-size:14px;line-height:1.6;">Dear Applicant,</p>
+     <p style="color:#484758;font-size:14px;line-height:1.6;">Good day!</p>
+     <p style="color:#484758;font-size:14px;line-height:1.6;">We are pleased to invite you to the <strong>next stages of the recruitment process</strong> for the <strong>${escHtml(jobTitle)}</strong> position. Kindly take note of the following schedule and details:</p>
+     <table style="margin:8px 0;">${row("Date", noticeDateLabel(d.date))}</table>
+     ${stageHtml}
+     ${d.notes ? `<div style="color:#484758;font-size:14px;line-height:1.7;white-space:pre-wrap;border-left:3px solid #e5e7eb;padding-left:12px;margin:12px 0;">${escHtml(d.notes)}</div>` : ""}
+     <p style="color:#b91c1c;font-size:14px;line-height:1.6;margin:16px 0 4px;"><strong>⚠ IMPORTANT REMINDER</strong></p>
+     <p style="color:#484758;font-size:14px;line-height:1.6;">This will be a <strong>one-day process</strong>. Please be advised that no alternate schedule will be provided, as the position is urgently needed. Failure to attend the scheduled interview will result in automatic removal from the shortlist, unless a prior request for rescheduling has been submitted and approved by the MIRDC Selection Board.</p>
+     <p style="color:#484758;font-size:14px;line-height:1.6;">Kindly confirm your availability for the abovementioned interview and assessment, by replying to this email. <strong>Should there be an official issuance of work suspension</strong> on the said date, the interview will be <strong>rescheduled accordingly</strong>, and you will be notified of the new schedule.</p>
+     <p style="color:#484758;font-size:14px;line-height:1.6;">Thank you.</p>
+     ${hrSignatureHtml()}`,
+    { official: true }
+  );
+  return { bodyText, bodyHtml };
+}
+
 export function emailInterviewInvitation(applicantName: string, jobTitle: string, d: NoticeDetails) {
   const row = (k: string, v: string) => `<tr><td style="padding:6px 12px 6px 0;color:#949494;font-size:13px;">${escHtml(k)}</td><td style="padding:6px 0;color:#181825;font-size:14px;">${escHtml(v)}</td></tr>`;
-  const schedule = noticeScheduleLines(d, "Interview");
   const online = d.mode === "online";
+
+  // One-day multi-stage edition (the office's "next stages" email).
+  const multi = multiStageNotice(applicantName, jobTitle, d);
+  if (multi) {
+    return {
+      subject: `Interview invitation: ${jobTitle}`,
+      bodyText: multi.bodyText,
+      bodyHtml: multi.bodyHtml,
+    };
+  }
+
+  const schedule = noticeScheduleLines(d, "Interview");
   return {
     subject: `Interview invitation: ${jobTitle}`,
-    bodyText: `Dear ${applicantName},\n\nWe are pleased to invite you to an interview for the ${jobTitle} position, scheduled as follows:\n\n${schedule.join("\n")}${d.notes ? `\n\n${d.notes}` : ""}\n\nKindly confirm your attendance by replying to this email. Please note that failure to attend the scheduled interview will result in the automatic removal of your name from the shortlist.${online ? "\n\nPlease ensure you have a stable internet connection and test your audio/video before the schedule." : "\n\nPlease bring your original credentials for verification."}\n\nMIRDC HR Office`,
+    bodyText: `Dear Applicant:
+
+We are pleased to invite you to an interview for the ${jobTitle} position, scheduled as follows:
+
+${schedule.join("\n")}${d.notes ? `\n\n${d.notes}` : ""}
+
+${PDF_INSTRUCTION_INTERVIEW}${online ? " Please ensure you have a stable internet connection and test your audio/video before the schedule." : ""}
+
+${CONFIRM_ATTENDANCE}
+
+Thank you very much!
+
+${hrSignatureText()}`,
     bodyHtml: emailShell(
       "Interview invitation",
-      `<p style="color:#484758;font-size:14px;line-height:1.6;">Dear ${escHtml(applicantName)},</p>
+      `<p style="color:#484758;font-size:14px;line-height:1.6;">Dear Applicant,</p>
        <p style="color:#484758;font-size:14px;line-height:1.6;">We are pleased to invite you to an <strong>interview</strong> for the <strong>${escHtml(jobTitle)}</strong> position, scheduled as follows:</p>
-       <table style="margin:8px 0;">${schedule.map((l) => { const i = l.indexOf(":"); return row(l.slice(0, i), l.slice(i + 1).trim()); }).join("")}</table>
+       <table style="margin:8px 0;">${noticeScheduleRows(d, "Interview").map(([k, v]) => row(k, v)).join("")}</table>
        ${d.notes ? `<div style="color:#484758;font-size:14px;line-height:1.7;white-space:pre-wrap;border-left:3px solid #e5e7eb;padding-left:12px;margin:12px 0;">${escHtml(d.notes)}</div>` : ""}
-       <p style="color:#484758;font-size:14px;line-height:1.6;">Kindly confirm your attendance by replying to this email. Please note that failure to attend the scheduled interview will result in the automatic removal of your name from the shortlist.</p>
-       ${online ? `<p style="color:#484758;font-size:14px;line-height:1.6;">Please ensure you have a stable internet connection and test your audio/video before the schedule.</p>` : `<p style="color:#484758;font-size:14px;line-height:1.6;">Please bring your original credentials for verification.</p>`}`
+       <p style="color:#484758;font-size:14px;line-height:1.6;">To facilitate the evaluation process, please ensure that your application documents are updated, complete, and compiled into <strong>one (1) PDF file</strong> before your scheduled interview.${online ? ` Please ensure you have a stable internet connection and test your audio/video before the schedule.` : ""}</p>
+       <p style="color:#484758;font-size:14px;line-height:1.6;">${escHtml(CONFIRM_ATTENDANCE)}</p>
+       <p style="color:#484758;font-size:14px;line-height:1.6;">Thank you very much!</p>
+       ${hrSignatureHtml()}`,
+      { official: true }
     ),
   };
 }
 
 export function emailSkillsExam(applicantName: string, jobTitle: string, d: NoticeDetails) {
   const row = (k: string, v: string) => `<tr><td style="padding:6px 12px 6px 0;color:#949494;font-size:13px;">${escHtml(k)}</td><td style="padding:6px 0;color:#181825;font-size:14px;">${escHtml(v)}</td></tr>`;
-  const schedule = noticeScheduleLines(d, "Examination");
   const online = d.mode === "online";
+  const confirmExam =
+    "Kindly confirm your attendance by replying to this email. Please note that failure to attend the scheduled examination will result in the automatic removal of your name from the shortlist.";
   return {
     subject: `Skills examination notice: ${jobTitle}`,
-    bodyText: `Dear ${applicantName},\n\nWe are pleased to invite you to a skills examination${d.examType ? ` (${d.examType})` : ""} for the ${jobTitle} position, scheduled as follows:\n\n${schedule.join("\n")}${d.notes ? `\n\n${d.notes}` : ""}\n\nKindly confirm your attendance by replying to this email. Please note that failure to attend the scheduled examination will result in the automatic removal of your name from the shortlist.${online ? "\n\nPlease ensure you have a stable internet connection and test your setup before the schedule." : "\n\nPlease bring a valid ID and a pen, and arrive 15 minutes early."}\n\nMIRDC HR Office`,
+    bodyText: `Dear Applicant:
+
+We are pleased to invite you to a skills examination${d.examType ? ` (${d.examType})` : ""} for the ${jobTitle} position, scheduled as follows:
+
+${noticeScheduleLines(d, "Examination").join("\n")}${d.notes ? `\n\n${d.notes}` : ""}
+
+To facilitate the evaluation process, please ensure that your application documents are updated, complete, and compiled into one (1) PDF file before your scheduled examination.${online ? " Please ensure you have a stable internet connection and test your setup before the schedule." : ""}
+
+${confirmExam}
+
+Thank you very much!
+
+${hrSignatureText()}`,
     bodyHtml: emailShell(
       "Skills examination notice",
-      `<p style="color:#484758;font-size:14px;line-height:1.6;">Dear ${escHtml(applicantName)},</p>
+      `<p style="color:#484758;font-size:14px;line-height:1.6;">Dear Applicant,</p>
        <p style="color:#484758;font-size:14px;line-height:1.6;">We are pleased to invite you to a <strong>skills examination</strong>${d.examType ? ` (<strong>${escHtml(d.examType)}</strong>)` : ""} for the <strong>${escHtml(jobTitle)}</strong> position, scheduled as follows:</p>
-       <table style="margin:8px 0;">${schedule.map((l) => { const i = l.indexOf(":"); return row(l.slice(0, i), l.slice(i + 1).trim()); }).join("")}</table>
+       <table style="margin:8px 0;">${noticeScheduleRows(d, "Examination").map(([k, v]) => row(k, v)).join("")}</table>
        ${d.notes ? `<div style="color:#484758;font-size:14px;line-height:1.7;white-space:pre-wrap;border-left:3px solid #e5e7eb;padding-left:12px;margin:12px 0;">${escHtml(d.notes)}</div>` : ""}
-       <p style="color:#484758;font-size:14px;line-height:1.6;">Kindly confirm your attendance by replying to this email. Please note that failure to attend the scheduled examination will result in the automatic removal of your name from the shortlist.</p>
-       ${online ? `<p style="color:#484758;font-size:14px;line-height:1.6;">Please ensure you have a stable internet connection and test your setup before the schedule.</p>` : `<p style="color:#484758;font-size:14px;line-height:1.6;">Please bring a valid ID and a pen, and arrive 15 minutes early.</p>`}`
+       <p style="color:#484758;font-size:14px;line-height:1.6;">To facilitate the evaluation process, please ensure that your application documents are updated, complete, and compiled into <strong>one (1) PDF file</strong> before your scheduled examination.${online ? ` Please ensure you have a stable internet connection and test your setup before the schedule.` : ""}</p>
+       <p style="color:#484758;font-size:14px;line-height:1.6;">${escHtml(confirmExam)}</p>
+       <p style="color:#484758;font-size:14px;line-height:1.6;">Thank you very much!</p>
+       ${hrSignatureHtml()}`,
+      { official: true }
     ),
   };
 }

@@ -109,7 +109,12 @@ export const POST = handleApi(async (req: Request, ctx: { params: Promise<{ id: 
     [profile?.firstName || app.applicant.firstName, profile?.lastName || app.applicant.lastName]
       .filter(Boolean)
       .join(" ") || "Applicant";
-  const title = app.job.position?.positionTitle || app.job.title;
+  // The office's real emails cite the position WITH its item number
+  // ("Metals Technologist III (MIRDCB-MTEK3-10-1998)").
+  const pos = app.job.position;
+  const title = pos?.positionTitle
+    ? `${pos.positionTitle}${pos.itemNumber ? ` (${pos.itemNumber})` : ""}`
+    : app.job.title;
   const recipient = app.applicant.emailAddress ?? "";
   const mobile = app.applicant.contactNumber ?? "";
 
@@ -122,6 +127,24 @@ export const POST = handleApi(async (req: Request, ctx: { params: Promise<{ id: 
     examType: input.examType ?? undefined,
     mode,
     meetingLink: input.meetingLink ?? undefined,
+    // One-day process: stage 1 from the main fields, 2..N from extraStages.
+    stages: [
+      {
+        title:
+          input.type === "interview"
+            ? mode === "online"
+              ? "Online Interview"
+              : "Face-to-face Interview"
+            : `Skills Examination${input.examType ? ` — ${input.examType}` : ""}`,
+        time: input.time ?? undefined,
+        venue: input.venue ?? undefined,
+      },
+      ...(input.extraStages ?? []).map((s) => ({
+        title: s.title,
+        time: s.time || undefined,
+        venue: s.venue || undefined,
+      })),
+    ],
   };
 
   // ── Fan out: email + companion SMS + in-app notification (§9.3) ─────────

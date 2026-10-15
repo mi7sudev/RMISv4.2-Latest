@@ -44,7 +44,7 @@ import { toast } from "@/lib/toast";
 import {
   AlertTriangle, Award, BadgeCheck, BookOpen, BriefcaseBusiness,
   Check, Eye, FileText, Gavel, GraduationCap, History, IdCard, ListChecks, Mail, MapPin,
-  CheckCircle2, Minus, Mails, Paperclip, RotateCcw, ScanSearch, Send, Tag, UserRound, Video, X, XCircle,
+  CheckCircle2, Minus, Mails, Paperclip, Plus, RotateCcw, ScanSearch, Send, Tag, Trash2, UserRound, Video, X, XCircle,
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/motion/tabs";
 import {
@@ -455,6 +455,12 @@ export function NoticeFormDialog({
   const [meetingLink, setMeetingLink] = useState("");
   const [contact, setContact] = useState("");
   const [details, setDetails] = useState("");
+  // One-day process — the office's real invitations run MULTIPLE stages in a
+  // single day (e.g. 1. Face-to-face Interview 12:30 PM, 2. Psychological
+  // Assessment 1:00 PM–3:00 PM). Stage 1 is the dialog's main date/time/venue
+  // block; these rows carry stages 2..N and flip the email into the "next
+  // stages" template with the IMPORTANT REMINDER + work-suspension clauses.
+  const [stages, setStages] = useState<{ title: string; time: string; venue: string }[]>([]);
   const [busy, setBusy] = useState(false);
   // Task 32 — official SignUpForm timing: the rules map is computed on EVERY
   // render (an error clears the moment its field is fixed); `shown` reveals a
@@ -491,6 +497,9 @@ export function NoticeFormDialog({
         contact: contact || undefined,
         notes: details || undefined,
         examType: kind === "skills_exam" ? examType || undefined : undefined,
+        extraStages: stages.some((s) => s.title.trim() || s.time.trim() || s.venue.trim())
+          ? stages.filter((s) => s.title.trim()).map((s) => ({ title: s.title.trim(), time: s.time.trim() || undefined, venue: s.venue.trim() || undefined }))
+          : undefined,
       };
       if (isBulk) {
         const res = await apiFetch<{ summary: { total: number; sent: number; alreadySent: number; notShortlisted: number; failed: number; notFound: number } }>(endpoint, {
@@ -653,6 +662,76 @@ export function NoticeFormDialog({
             placeholder="Name / number for questions"
             reserveErrorLine
           />
+          {/* One-day process — additional stages (2..N). Stage 1 is the main
+              date/time/venue block above. Two+ stages switch the emailed
+              invitation to the office's "next stages" template. */}
+          <div>
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-sm font-medium text-ink">Additional stages (one-day process)</p>
+              <button
+                type="button"
+                onClick={() => setStages((prev) => [...prev, { title: "", time: "", venue: "" }])}
+                disabled={stages.length >= 5}
+                className={cn(ghostBtn, "min-h-[36px] px-3 text-xs")}
+              >
+                <Plus className="h-3.5 w-3.5" aria-hidden />
+                Add a stage
+              </button>
+            </div>
+            <p className="mt-1 px-1 text-xs text-stone">
+              Optional — e.g. a Psychological Assessment after the interview. With two or more stages the invitation is sent as a one-day, multi-stage schedule.
+            </p>
+            {stages.length > 0 && (
+              <div className="mt-2 space-y-3">
+                {stages.map((stage, i) => (
+                  <div key={i} className="rounded-xl border border-border bg-cloud/40 p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs font-medium uppercase tracking-[0.06em] text-stone">Stage {i + 2}</p>
+                      <button
+                        type="button"
+                        onClick={() => setStages((prev) => prev.filter((_, j) => j !== i))}
+                        aria-label={`Remove stage ${i + 2}`}
+                        className="inline-flex min-h-[36px] items-center gap-1 rounded-lg px-2 text-xs font-medium text-[var(--bad)] transition-colors hover:bg-[var(--bad)]/10"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" aria-hidden />
+                        Remove
+                      </button>
+                    </div>
+                    <div className="mt-2 flex flex-col gap-3">
+                      <Input
+                        id={`notice-stage-title-${i}`}
+                        label="Stage title *"
+                        value={stage.title}
+                        onChange={(next) => setStages((prev) => prev.map((s, j) => (j === i ? { ...s, title: next } : s)))}
+                        placeholder="e.g. Psychological Assessment"
+                        leftIcon={<ListChecks />}
+                        reserveErrorLine
+                      />
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <Input
+                          id={`notice-stage-time-${i}`}
+                          label="Time"
+                          value={stage.time}
+                          onChange={(next) => setStages((prev) => prev.map((s, j) => (j === i ? { ...s, time: next } : s)))}
+                          placeholder="e.g. 1:00 PM – 3:00 PM"
+                          reserveErrorLine
+                        />
+                        <Input
+                          id={`notice-stage-venue-${i}`}
+                          label="Venue"
+                          value={stage.venue}
+                          onChange={(next) => setStages((prev) => prev.map((s, j) => (j === i ? { ...s, venue: next } : s)))}
+                          placeholder="Building / room"
+                          leftIcon={<MapPin />}
+                          reserveErrorLine
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
           {/* MOM 2026-10-13 — "Notes" is now "Invitation Details": LONG text,
               no character limit. */}
           <Textarea
