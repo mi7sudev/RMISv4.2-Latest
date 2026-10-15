@@ -480,3 +480,19 @@ Work Log:
 
 Stage Summary:
 - Header logo now renders as a complete, centered seal on a defined circular chip; the padded asset improves every BrandLogo call site and the favicon with zero code changes elsewhere.
+
+---
+Task ID: 4
+Agent: Z.ai Code (main agent)
+Task: Header must show the complete two-logo composition from upload/mirdc-logo.png (user: "it composed of two logo but i only see one logo on the header").
+
+Work Log:
+- Re-read the user's clarification: upload/mirdc-logo.png is a TWO-logo lockup (plain DOST quatrefoil left + MIRDC gear-crest seal right); the header was only rendering the right variant, which is what the user was reporting since the "did not fit properly" message.
+- Built public/MIRDC-header-logo.png (823x415): full ink bbox of the composition (x45..835, y63..445 -> 791x383) extracted from the upload, symmetric 16px transparent padding, no interpolation.
+- site-header.tsx: replaced the single-seal BrandLogo chip with the wide two-logo image (height 40px, w-auto, floating on the capsule like the artwork on white paper); removed the now-unused BrandLogo import.
+- Kept the single square seal (MIRDC-mark.png, padded in Task 3) for favicon, workspace rails, job cards and auth surfaces.
+- Browser-verified (fresh public session): desktop header shows both marks crisply; iPhone 14 mobile capsule shows the lockup next to nav + Sign in. lint clean, dev.log clean.
+- Committed as "Show complete two-logo composition in the header".
+
+Stage Summary:
+- Header now faithfully carries the agency's two-logo artwork; single-seal asset remains for compact brand contexts.
