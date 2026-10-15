@@ -496,3 +496,20 @@ Work Log:
 
 Stage Summary:
 - Header now faithfully carries the agency's two-logo artwork; single-seal asset remains for compact brand contexts.
+
+---
+Task ID: 5
+Agent: Z.ai Code (main agent)
+Task: Remove "Browse the full board" (frontpage hero) and "Vacant Positions" (header); add a search bar and a sort to the frontpage instead.
+
+Work Log:
+- site-header.tsx: retired the "Vacant Positions" secondary link (Contact is now the only secondary link; Sign in / Dashboard capsule unchanged).
+- public-landing.tsx: removed the hero CTA; added a single-line [search bar] + [Sort] row above the job register — the same pattern as the board's mobile Job Openings filter (Input w/ Search leftIcon + MorphSelect, 124px, trio Newest/Deadline/Salary desc).
+- Filter logic: needle over title, position title, item number, division full name AND place of assignment (browser testing caught that "metrology" matched nothing until jobPlace(j) was added — the card visibly reads "Metrology Laboratory" via its place line); comparators identical to the board's.
+- Selection behavior: desktop auto-select now snaps to the top of the FILTERED register (replaces the openJobs[0] initial-select), so the posting pane always follows the visible list; stale-selection reset kept for mobile.
+- Empty result state ("No positions match your search" + Clear search) inside the register.
+- Browser-verified: desktop header (Contact + Sign in only), hero without CTA, search "metrology" filters to SRS I and auto-selects it in the pane, Salary desc reorders ₱66,459 → ₱31,699 → ₱22,316, iPhone 14 layout clean. lint clean, dev.log clean.
+- Committed as 8ea1a08.
+
+Stage Summary:
+- The landing explorer is now the single public browsing surface (search + sort); the #/vacant-positions board route remains for direct links and the landing's no-jobs empty state.
