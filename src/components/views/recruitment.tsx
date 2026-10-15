@@ -14,17 +14,20 @@
 // card, auth header typography, icon-led fields with reserved error lines,
 // blur-timed field errors, official StatefulButton submit.
 // Task 10 — the dialog carries the posting's COMPLETE front-page identity:
-// Place of Assignment (the public board's location line) and Salary Step
-// (the SG grade/step pair) join the vitals write-through. The modal itself
+// Place of Assignment (the public board's location line) joins the vitals
+// write-through (Task 10-d retired the Salary Step field per feedback — the
+// board renders the SG grade alone when no step is stored). The modal itself
 // grows into an enterprise form frame: a wider card — max-w-5xl (1024px) on
 // laptops, scaling to 80vw capped at 1440px from the 2xl breakpoint so wide
 // desktop monitors get a proportionally larger dialog — with a sticky
 // header (eyebrow + title + guidance) and sticky footer (contextual hint +
 // actions) framing a scrollable body, and the panels in a two-column grid at
 // lg — Position Details beside Compensation & Vacancy — so the whole posting
-// fits one glance instead of an endless single column. Identical for ADMIN
-// and EVALUATOR: both roles create/edit through this one dialog
-// (#/recruitment "New posting", #/job edit).
+// fits one glance instead of an endless single column. Task 10-d — every
+// field box is WHITE (bg-white on the Input/Textarea field wrappers) so the
+// controls pop against the cloud FormPanel tint instead of melting into it.
+// Identical for ADMIN and EVALUATOR: both roles create/edit through this one
+// dialog (#/recruitment "New posting", #/job edit).
 // Scalability 2026-10 — the four type-or-pick fields are STAFF-EXTENSIBLE:
 // the Combobox panels grow an "Add …" row whenever typed text matches no
 // choice; confirming it POSTs /api/options (EVALUATOR/ADMIN-gated), which
@@ -150,7 +153,6 @@ export function JobFormDialog({
   const [positionType, setPositionType] = useState("");
   const [itemNumber, setItemNumber] = useState("");
   const [salaryGrade, setSalaryGrade] = useState("");
-  const [salaryStep, setSalaryStep] = useState("");
   const [placeOfAssignment, setPlaceOfAssignment] = useState("");
   const [salaryAmount, setSalaryAmount] = useState("");
   const [vacancy, setVacancy] = useState("1");
@@ -336,7 +338,6 @@ export function JobFormDialog({
       setPositionType("");
       setItemNumber("");
       setSalaryGrade("");
-      setSalaryStep("");
       setPlaceOfAssignment("");
       setSalaryAmount("");
       setVacancy("1");
@@ -359,7 +360,6 @@ export function JobFormDialog({
     setPositionType(job.positionType ?? "");
     setItemNumber(job.position?.itemNumber ?? "");
     setSalaryGrade(job.position?.salaryGrade ?? "");
-    setSalaryStep(job.position?.salaryStep ?? "");
     setPlaceOfAssignment(job.position?.placeOfAssignment ?? "");
     setSalaryAmount(job.position?.salaryAmount == null ? "" : String(job.position.salaryAmount));
     setVacancy(job.numberOfVacancy == null ? "" : String(job.numberOfVacancy));
@@ -398,7 +398,6 @@ export function JobFormDialog({
         positionType: opt(positionType),
         itemNumber: opt(itemNumber),
         salaryGrade: opt(salaryGrade),
-        salaryStep: opt(salaryStep),
         placeOfAssignment: opt(placeOfAssignment),
         salaryAmount: salaryAmountNum ?? undefined,
         numberOfVacancy: vacancyNum,
@@ -480,6 +479,7 @@ export function JobFormDialog({
                   onBlur={() => touch("title")}
                   placeholder="e.g. Science Research Specialist I"
                   leftIcon={<Briefcase />}
+                  classNames={{ field: "bg-white" }}
                   error={shown("title")}
                   reserveErrorLine
                 />
@@ -530,6 +530,7 @@ export function JobFormDialog({
                       onChange={setItemNumber}
                       onBlur={() => touch("itemNumber")}
                       placeholder="e.g. MIRDC-OSDS-SSRS-1-2026"
+                      classNames={{ field: "bg-white" }}
                       error={shown("itemNumber")}
                       reserveErrorLine
                     />
@@ -575,6 +576,7 @@ export function JobFormDialog({
                       maxLength={500}
                       onChange={(next) => setExperience(next)}
                       placeholder='e.g. 1 year of relevant experience'
+                      classNames={{ field: "bg-white" }}
                       reserveErrorLine
                     />
                     <Input
@@ -584,6 +586,7 @@ export function JobFormDialog({
                       maxLength={500}
                       onChange={(next) => setTraining(next)}
                       placeholder='e.g. 8 hours of relevant training'
+                      classNames={{ field: "bg-white" }}
                       reserveErrorLine
                     />
                   </div>
@@ -603,6 +606,7 @@ export function JobFormDialog({
                     value={license}
                     maxLength={500}
                     onChange={(next) => setLicense(next)}
+                    classNames={{ field: "bg-white" }}
                     reserveErrorLine
                   />
                 </div>
@@ -615,8 +619,10 @@ export function JobFormDialog({
                     (CSC schedule, free-typing allowed) and the Monthly Salary
                     it carries; both write through to the linked Position so
                     every board, detail pane, and the jobs table render them.
-                    Task 10 — Salary Step joins the pair so the public board's
-                    "SG 19/1" quick fact is fully editable from the form. */}
+                    Task 10-d — Salary Step retired from the form per feedback
+                    (the SG grade dropdown + monthly salary carry the pay
+                    story); boards render "SG 19" when no step is stored, and
+                    legacy step values keep rendering where present. */}
                 <div className="grid gap-4 sm:grid-cols-2">
                   <Combobox
                     id="job-salary-grade"
@@ -627,33 +633,25 @@ export function JobFormDialog({
                     placeholder="Select or type (e.g. 19)"
                     triggerClassName="h-11 bg-white"
                   />
-                  <Input
-                    id="job-salary-step"
-                    label="Salary step"
-                    value={salaryStep}
-                    maxLength={20}
-                    onChange={setSalaryStep}
-                    placeholder="e.g. 1"
-                    reserveErrorLine
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Input
-                    id="job-salary-amount"
-                    type="number"
-                    min={0}
-                    step="0.01"
-                    label="Monthly salary (PHP)"
-                    value={salaryAmount}
-                    onChange={setSalaryAmount}
-                    onBlur={() => touch("salaryAmount")}
-                    placeholder="e.g. 51367.00"
-                    error={shown("salaryAmount")}
-                    reserveErrorLine
-                  />
-                  {!shown("salaryAmount") && (
-                    <p className="px-1 text-xs text-stone">Shown as the posting's Monthly Salary everywhere.</p>
-                  )}
+                  <div className="space-y-1.5">
+                    <Input
+                      id="job-salary-amount"
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      label="Monthly salary (PHP)"
+                      value={salaryAmount}
+                      onChange={setSalaryAmount}
+                      onBlur={() => touch("salaryAmount")}
+                      placeholder="e.g. 51367.00"
+                      classNames={{ field: "bg-white" }}
+                      error={shown("salaryAmount")}
+                      reserveErrorLine
+                    />
+                    {!shown("salaryAmount") && (
+                      <p className="px-1 text-xs text-stone">Shown as the posting's Monthly Salary everywhere.</p>
+                    )}
+                  </div>
                 </div>
                 <div className="space-y-1.5">
                   <Input
@@ -665,6 +663,7 @@ export function JobFormDialog({
                     value={vacancy}
                     onChange={setVacancy}
                     onBlur={() => touch("vacancy")}
+                    classNames={{ field: "bg-white" }}
                     error={shown("vacancy")}
                     reserveErrorLine
                   />
@@ -676,7 +675,7 @@ export function JobFormDialog({
                   <Textarea
                     id="job-compensation"
                     label="Compensation package"
-                    classNames={{ textarea: "min-h-[80px]" }}
+                    classNames={{ field: "bg-white", textarea: "min-h-[80px]" }}
                     value={compensation}
                     maxLength={4000}
                     onChange={(next) => setCompensation(next)}
@@ -695,7 +694,7 @@ export function JobFormDialog({
                 <Textarea
                   id="job-brief"
                   label="Brief description"
-                  classNames={{ textarea: "min-h-[80px]" }}
+                  classNames={{ field: "bg-white", textarea: "min-h-[80px]" }}
                   value={brief}
                   maxLength={5000}
                   onChange={(next) => setBrief(next)}
@@ -706,7 +705,7 @@ export function JobFormDialog({
                 <Textarea
                   id="job-duties"
                   label="Duties & responsibilities"
-                  classNames={{ textarea: "min-h-[100px]" }}
+                  classNames={{ field: "bg-white", textarea: "min-h-[100px]" }}
                   value={duties}
                   maxLength={8000}
                   onChange={(next) => setDuties(next)}
@@ -717,7 +716,7 @@ export function JobFormDialog({
                 <Textarea
                   id="job-quals"
                   label="Other qualifications"
-                  classNames={{ textarea: "min-h-[80px]" }}
+                  classNames={{ field: "bg-white", textarea: "min-h-[80px]" }}
                   value={otherQuals}
                   maxLength={4000}
                   onChange={(next) => setOtherQuals(next)}
@@ -729,9 +728,9 @@ export function JobFormDialog({
 
           <FormPanel title="Publishing" icon={CalendarClock} chipTone="gold">
             <div className="grid gap-4 sm:grid-cols-3">
-              <Input id="job-publish" type="date" label="Publish date" value={publishDate} onChange={(next) => setPublishDate(next)} reserveErrorLine />
-              <Input id="job-deadline" type="date" label="Deadline" value={deadlineDate} onChange={(next) => setDeadlineDate(next)} reserveErrorLine />
-              <Input id="job-processing" type="date" label="Processing date" value={processingDate} onChange={(next) => setProcessingDate(next)} reserveErrorLine />
+              <Input id="job-publish" type="date" label="Publish date" value={publishDate} onChange={(next) => setPublishDate(next)} classNames={{ field: "bg-white" }} reserveErrorLine />
+              <Input id="job-deadline" type="date" label="Deadline" value={deadlineDate} onChange={(next) => setDeadlineDate(next)} classNames={{ field: "bg-white" }} reserveErrorLine />
+              <Input id="job-processing" type="date" label="Processing date" value={processingDate} onChange={(next) => setProcessingDate(next)} classNames={{ field: "bg-white" }} reserveErrorLine />
             </div>
           </FormPanel>
         </div>
