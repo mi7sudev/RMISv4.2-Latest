@@ -819,3 +819,20 @@ Work Log:
 Stage Summary:
 - Commit (Task 11-f); working tree clean.
 - The invitation send now lives where it reads: inside the Shortlisted column of the job's pipeline kanban — visually AND structurally scoped to that posting. The KanbanColumn action slot is reusable for future column-scoped controls.
+
+---
+Task ID: 12
+Agent: Z.ai Code (main agent)
+Task: Increase the width of the "Send interview invitation" modal on desktop, especially on wider screens.
+
+Work Log:
+- The modal is the shared NoticeFormDialog in review-workspace.tsx (interview invitations AND skills-exam notices), mounted from three entry points — Review Queue dossier, Jobs table row action, Pipeline kanban Shortlisted-column action — so one width change covers all of them. It was capped at sm:max-w-md (448px) on top of the BEUI core panel's max-w-[26rem] mobile cap (center-morph-modal.tsx).
+- review-workspace.tsx: replaced "sm:max-w-md" with a responsive ladder "sm:max-w-xl lg:max-w-2xl xl:max-w-3xl 2xl:max-w-4xl" (576 → 672 → 768 → 896px); mobile keeps the core 26rem panel byte-identical. twMerge/tailwind cascade makes the breakpoint classes override the core cap progressively (same mechanism the old sm:max-w-md used). Comment updated to record the Task 12 decision. All other dialogs (Decision, direct email — sm:max-w-lg) untouched.
+- Browser verification (JS-driven clicks after the headless session's real-input pipeline died — window capture listeners proved zero CDP mouse events reached ANY page element, including plain buttons; JS .click() rides the identical React onClick path, and elementFromPoint hit-testing confirmed no overlay intercepts the buttons, so the app itself is healthy):
+  1024×768 (lg band) → 672px; 1440×900 (xl band) → 768px from BOTH the Jobs table row button and the Pipeline kanban column button (same shared dialog); 1920×1080 (2xl band) → 896px — the "wider screens" ask, exactly 2× the old 448px; 390×844 mobile → 358px (w-full under the 26rem cap), layout unchanged, no horizontal overflow anywhere.
+- Screenshots inspected visually: 1440 and 1920 renders are well-proportioned (date/time 2-col breathes, textarea roomy, no over-stretched inputs); mobile stacked layout unchanged. Saved: .verify/12-invite-dialog-1024.png, 12-invite-dialog-1440.png, 12-invite-dialog-1920.png, 12-kanban-entry-dialog-1440.png, 12-mobile-invite-dialog.png.
+- bun run lint clean; dev.log shows only healthy API traffic.
+
+Stage Summary:
+- Commit 7daf127 (Task 12); working tree clean.
+- The invitation/notice composer now scales with the screen: 448px before → 576/672/768/896px across sm/lg/xl/2xl, mobile untouched. Every entry point shares the widened dialog, and nothing else about the notice flow changed.
