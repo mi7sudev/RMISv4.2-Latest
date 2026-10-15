@@ -715,3 +715,19 @@ Work Log:
 Stage Summary:
 - Commit (Task 10); lint clean; dev log clean for this session (parse errors in dev.log predate this task — mid-edit state of a prior task); working tree clean.
 - The create/edit job dialog now captures the posting's COMPLETE front-page identity — title, type, division, item no., place of assignment, SG grade/step, monthly salary, vacancies, brief/responsibilities/qualifications/compensation, publish/deadline/processing — written through to Position, identical for ADMIN and EVALUATOR; the modal is a wider enterprise frame (pinned header/footer, two-column panels, self-documenting hints).
+
+---
+Task ID: 10-b
+Agent: Z.ai Code (main agent)
+Task: Create-job dialog — increase the width a little more on desktop view.
+
+Work Log:
+- User: "increase the width of it a little more on desktop view" — Task 10 set the enterprise dialog to max-w-4xl (896px); user wants it wider on desktop.
+- src/components/views/recruitment.tsx: DialogContent sm:max-w-4xl → sm:max-w-5xl (896px → 1024px, +128px); MOM comments (file header + dialog frame) updated to name the new width. Mobile untouched — the sm: breakpoint keeps <640px at full width.
+- Browser verification (agent-browser): desktop 1440×900 dialog measures exactly 1024px computed width; wider two-column panels read airier (Position Details | Compensation & Vacancy), and the Publishing panel now fits Publish date + Deadline + Processing date in one row; pinned header/footer intact top and bottom. Mobile 390×844 re-verified: 358px full-width single-column stack unchanged. Shared JobFormDialog → ADMIN and EVALUATOR inherit the width identically.
+- Screenshots: .verify/10b-create-5xl-desktop-top.png, 10b-create-5xl-desktop-bottom.png, 10b-create-5xl-mobile.png.
+- bun run lint clean; dev.log clean for this session.
+
+Stage Summary:
+- Commit (Task 10-b); working tree clean.
+- The create/edit job dialog is now 1024px wide on desktop (max-w-5xl) — a little more room as requested — while the mobile experience is byte-identical to before.
