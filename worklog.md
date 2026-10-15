@@ -581,3 +581,20 @@ Work Log:
 
 Stage Summary:
 - The decision rail is visually status-driven end to end: every decision action wears the color of the pipeline stage it produces, the duplicate state banner is gone, and the credentials/notices/email cards read as clean structured cards. All destructive/positive ghost styling is now cascade-proof via unlayered tokens.
+
+---
+Task ID: 9-b
+Agent: Z.ai Code (main agent)
+Task: User QA follow-up on the same decision rail — "how about this part": enhance the Requirements match block (jumbled reading order, dimension label stranded at the bottom-right of each card, "None required"/"N/A" + "Not required" double-say, plain-text "2 of 2 standards met" summary).
+
+Work Log:
+- Audit: all 16 seeded applications compute ALL_MET (seed places every applicant against matching standards), so the NOT_MET branch had no live example; verified both branches end-to-end by temporarily raising Position 4's cscTraining to "500 hours" (James Mendoza: 72 hrs on file → NOT_MET) and reverting to "None required" afterwards (revert re-verified in browser: back to 2 of 2).
+- RequirementsMatchPanel redesigned: each relevant check card now reads top-down — status IconChip + uppercase dimension label (EDUCATION/EXPERIENCE/TRAINING/ELIGIBILITY, same icon vocabulary as the Credentials grid and dossier tabs) → StatusPill far right → CSC standard as the prominent line → applicant on-file summary muted below → red AlertTriangle shortfall only when present. The bottom-right dimension chip is gone.
+- Segmented scorecard meter: one rounded segment per relevant check colored by status (--ok/--bad/--warn) beside "N of M standards met" (green when all met, amber on partial).
+- Not-required dimensions collapsed into one muted "NOT REQUIRED FOR THIS POSTING" group with per-dimension icon rows (Training · 1 training entry / Eligibility · 1 on file) — eliminates the old "None required" + "Not required" full-card redundancy.
+- Added DIMENSION_META + SEGMENT_COLOR maps; imported RequirementCheck type; header comment documents the pass.
+- Browser-verified as testevaluator: app 8 ALL_MET (2 green segments, compact group), app 8 under mutated standard (Partial pill, amber "2 of 3", red segment, TRAINING "Not met" card, "428 more hours of relevant training needed" shortfall), post-revert reload (2 of 2 restored), mobile 390px clean; computed segment colors asserted via eval (rgb(31,122,61) ok / rgb(168,67,47) bad).
+- bun run lint clean; dev.log clean; committed e9ed811.
+
+Stage Summary:
+- The Requirements match panel now reads category-first with a glanceable scorecard meter and a single quiet line for dimensions the posting doesn't require; both ALL_MET and NOT_MET branches verified live with zero net data change.
