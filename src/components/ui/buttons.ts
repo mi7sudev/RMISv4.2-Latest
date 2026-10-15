@@ -16,6 +16,16 @@
 export const ctaBtn =
   "dlg-cta inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl px-5 text-sm transition-all disabled:cursor-not-allowed disabled:opacity-50";
 
+/** Solid semantic CTAs — decision buttons wear the EXACT color of the
+ *  pipeline status they produce (Shortlist → --ok green, the Shortlisted
+ *  pill color; Not Qualified → --bad red, the Rejected pill color), so the
+ *  action and its outcome status read as one. Same geometry as ctaBtn. */
+export const ctaOkBtn =
+  "dlg-cta-ok inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl px-5 text-sm transition-all disabled:cursor-not-allowed disabled:opacity-50";
+
+export const ctaBadBtn =
+  "dlg-cta-bad inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl px-5 text-sm transition-all disabled:cursor-not-allowed disabled:opacity-50";
+
 /** Secondary — white ghost button (44px, hairline border). */
 export const ghostBtn =
   "dlg-ghost inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl px-4 text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-50";
@@ -38,9 +48,16 @@ export const iconBtnBad =
   "grid h-9 w-9 place-items-center rounded-2xl text-[var(--bad)] transition-colors hover:bg-[var(--bad-bg)] focus-ring";
 
 /** Modifier-only destructive ghost (append to ghostBtn when a full control
- *  already carries the capsule base, e.g. AlertDialogAction). */
-export const ghostBadModifier =
-  "border-[var(--bad)]/30 bg-white text-[var(--bad)] hover:bg-[var(--bad-bg)]";
+ *  already carries the capsule base, e.g. AlertDialogAction). Class-based —
+ *  NOT utilities — because .dlg-ghost's unlayered color/background/border
+ *  would beat layered utilities (globals.css .dlg-ghost-bad). */
+export const ghostBadModifier = "dlg-ghost-bad";
+
+/** Modifier-only positive ghost (append to ghostBtn) — the mirror of
+ *  ghostBadModifier for affirmative secondary actions ("Flip to
+ *  Shortlisted"). Same unlayered-token mechanism (globals.css
+ *  .dlg-ghost-ok). */
+export const ghostOkModifier = "dlg-ghost-ok";
 
 /** Dialog cancel — the one secondary "Cancel" recipe for AlertDialogCancel /
  *  form dialogs (44px ghost). The six profile sections and form-dialog

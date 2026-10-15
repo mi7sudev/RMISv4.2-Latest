@@ -7,9 +7,17 @@
 // the deep-link `#/evaluator-review?id=<applicationId>` from useHashRoute and
 // renders page-style with a close action back to the review queue.
 // LEFT = frozen-snapshot dossier (capsule section tabs), RIGHT = decision
-// rail (requirements match, credentials, state banner, decisions, notices,
-// direct email). Enterprise polish pass: functional status pills/dots only —
-// every handler, fetch, and confirmation dialog is unchanged.
+// rail (requirements match, credentials, decisions, notices, direct email —
+// the old standalone state banner was removed as a duplicate: the status
+// pill already lives in the dossier header). Enterprise polish pass:
+// functional status pills/dots only — every handler, fetch, and confirmation
+// dialog is unchanged.
+// Rail polish (user QA 2026-02): decision buttons wear the EXACT color of
+// the status they produce (Start Review = blue CTA → Under Review family,
+// Shortlist = solid --ok green → Shortlisted pill, Not Qualified = solid
+// --bad red → Rejected pill); "Credentials on file" is a 2-column icon
+// grid instead of wrapping pill chips; Notices / Direct email cards carry
+// icon-led meta rows and quieter empty states.
 // Bevel pass: shared page header with round back affordance, white dossier
 // panel with cloud/60 snapshot tiles + capsule tabs, cloud decision-rail
 // cards with white/70 interior tiles, brand-blue links, blue decision
@@ -20,10 +28,8 @@
 // Decision flow: Shortlist / Not Qualified each open a decision composer
 // dialog (remarks optional) — its Confirm is guarded by a decision
 // confirmation dialog, exactly like the direct-email composer. Decision
-// actions carry proper plain lucide glyphs (outlined green check-circle for
-// Shortlist, outlined red X-circle for Not Qualified) — same style as the
-// Send icon on
-// the direct-email button, no chip boxes. Direct email
+// actions now carry solid semantic fills (see Rail polish note above) with
+// plain white lucide glyphs. Direct email
 // is a composer dialog opened from a "Send a direct email" button, with the
 // recipient auto-retrieved from the applicant profile.
 // Task 31 — the notice and direct-email dialogs run the sign-in/sign-up
@@ -45,6 +51,7 @@ import {
   AlertTriangle, Award, BadgeCheck, BookOpen, BriefcaseBusiness,
   Check, Eye, FileText, Gavel, GraduationCap, History, IdCard, ListChecks, Mail, MapPin,
   CheckCircle2, Minus, Mails, Paperclip, Plus, RotateCcw, ScanSearch, Send, Tag, Trash2, UserRound, Video, X, XCircle,
+  type LucideIcon,
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/motion/tabs";
 import {
@@ -68,7 +75,9 @@ import {
   EmptyNote, EmptyState, IconChip, LedgerRow, MonogramAvatar, PageHeader, SkeletonRows,
   StatusPill, VerdictPill, dialogScroll, type ChipTone,
 } from "@/components/ui/shell";
-import { ghostBtn, ctaBtn, ghostBadModifier } from "@/components/ui/buttons";
+import {
+  ghostBtn, ctaBtn, ctaOkBtn, ctaBadBtn, ghostBadModifier, ghostOkModifier,
+} from "@/components/ui/buttons";
 import { apiFetch, formatDate, formatDateTime, fullName, humanize, timeAgo } from "@/lib/client";
 import { DocumentPreviewModal, documentStatusChip, fileKind, type PreviewDoc } from "@/components/ui/document-preview";
 import { getStatusMeta, stageForStatus } from "@/lib/status";
@@ -391,14 +400,17 @@ function RequirementsMatchPanel({ report }: { report: RequirementsReport }) {
 function CredentialsRow({ payload }: { payload: ReviewPayload }) {
   const p = payload.snapshots.profile;
   const personalCount = p ? Object.values(p).filter((v) => v !== null && v !== "" && v !== undefined).length : 0;
-  const items: [string, number][] = [
-    ["Personal", personalCount],
-    ["Education", payload.snapshots.educations.length],
-    ["Work", payload.snapshots.experiences.length],
-    ["Training", payload.snapshots.trainings.length],
-    ["Eligibility", payload.snapshots.eligibilities.length],
-    ["Awards", payload.snapshots.awards.length],
-    ["Documents", payload.snapshots.documents.length],
+  // 2-column icon grid — one row per credential section (user QA: the old
+  // 7 pill chips wrapped across three ragged lines). Zeros render muted so
+  // an empty section never reads as an error. Documents spans the full row.
+  const items: { label: string; count: number; icon: LucideIcon; span?: boolean }[] = [
+    { label: "Personal", count: personalCount, icon: UserRound },
+    { label: "Education", count: payload.snapshots.educations.length, icon: GraduationCap },
+    { label: "Work", count: payload.snapshots.experiences.length, icon: BriefcaseBusiness },
+    { label: "Training", count: payload.snapshots.trainings.length, icon: BookOpen },
+    { label: "Eligibility", count: payload.snapshots.eligibilities.length, icon: BadgeCheck },
+    { label: "Awards", count: payload.snapshots.awards.length, icon: Award },
+    { label: "Documents", count: payload.snapshots.documents.length, icon: FileText, span: true },
   ];
   return (
     <div className="dlg-card p-4">
@@ -406,22 +418,25 @@ function CredentialsRow({ payload }: { payload: ReviewPayload }) {
         <IconChip icon={IdCard} tone="slate" size={28} iconSize={13} />
         <h3 className="text-[15px] font-medium leading-6 text-ink">Credentials on file</h3>
       </div>
-      <div className="mt-2.5 flex flex-wrap gap-1.5">
-        {items.map(([label, n]) => (
-          <span key={label} className="status-pill status-neutral">
-            {label}: <span className="num">{n}</span>
-          </span>
+      <div className="mt-3 grid grid-cols-2 gap-1.5">
+        {items.map(({ label, count, icon: Icon, span }) => (
+          <div
+            key={label}
+            className={cn(
+              "flex min-w-0 items-center gap-2 rounded-lg bg-white px-2.5 py-2",
+              span && "col-span-2"
+            )}
+          >
+            <Icon className="h-3.5 w-3.5 shrink-0 text-stone" aria-hidden />
+            <span className="min-w-0 flex-1 truncate text-xs text-stone">{label}</span>
+            <span className={cn("num text-sm font-medium", count === 0 ? "text-pebble" : "text-ink")}>
+              {count}
+            </span>
+          </div>
         ))}
       </div>
     </div>
   );
-}
-
-function stateBanner(stage: string): { text: string; cls: string } {
-  if (stage === "Shortlisted") return { text: "Applicant has been notified.", cls: "text-stone" };
-  if (stage === "Rejected") return { text: "Applicant was not shortlisted.", cls: "text-stone" };
-  if (stage === "Under Review") return { text: "Review in progress.", cls: "text-ink" };
-  return { text: "Awaiting review.", cls: "text-stone" };
 }
 
 // ── Notice form dialog (interview / skills exam) ────────────────────────────
@@ -1132,11 +1147,23 @@ function DirectEmailCard({
         <IconChip icon={Mail} tone="slate" size={28} iconSize={13} />
         <h3 className="text-[15px] font-medium leading-6 text-ink">Direct email</h3>
       </div>
-      <p className="mt-1 text-xs text-stone">
-        {recipient
-          ? "Recipient is pulled from the applicant's profile email; attachments ≤ 3 files × 5 MB."
-          : "No email on record; the applicant left the profile email blank."}
-      </p>
+      {recipient ? (
+        <div className="mt-2.5 space-y-1.5">
+          {/* Icon-led meta rows replace the old run-on sentence (user QA). */}
+          <p className="flex items-center gap-2 text-xs text-stone">
+            <Mail className="h-3.5 w-3.5 shrink-0 text-pebble" aria-hidden />
+            <span className="min-w-0 flex-1 truncate" title={recipient}>
+              {recipient}
+            </span>
+          </p>
+          <p className="flex items-center gap-2 text-xs text-stone">
+            <Paperclip className="h-3.5 w-3.5 shrink-0 text-pebble" aria-hidden />
+            Up to 3 attachments · 5 MB each
+          </p>
+        </div>
+      ) : (
+        <p className="mt-2 text-xs text-stone">No email on record; the applicant left the profile email blank.</p>
+      )}
       <button
         type="button"
         className={ctaBtn + " mt-3 w-full"}
@@ -1147,12 +1174,20 @@ function DirectEmailCard({
         Send a direct email
       </button>
       <div className="mt-4 border-t border-divider pt-3">
-        <p className="text-xs font-medium text-stone">History</p>
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-xs font-medium text-stone">History</p>
+          {emails !== null && emails.length > 0 && (
+            <span className="dlg-pill num bg-fog px-2 py-0.5 text-[10px] font-medium text-stone">{emails.length}</span>
+          )}
+        </div>
         <div className="mt-2 max-h-48 space-y-1.5 overflow-y-auto scroll-thin">
           {emails === null ? (
             <p className="text-xs text-stone">Loading…</p>
           ) : emails.length === 0 ? (
-            <p className="text-xs text-stone">No direct emails sent yet.</p>
+            <p className="flex items-center gap-1.5 text-xs text-stone">
+              <Mail className="h-3.5 w-3.5 shrink-0 text-pebble" aria-hidden />
+              No direct emails sent yet.
+            </p>
           ) : (
             emails.map((m) => {
               const atts = parseAttachments(m.attachments);
@@ -1361,7 +1396,6 @@ export function ReviewWorkspace({
 
   const p = payload.snapshots.profile ?? {};
   const characterRefs = Array.isArray(p.characterReferences) ? (p.characterReferences as SnapRow[]) : [];
-  const banner = stateBanner(stage);
   const positionTitle = payload.job.position?.positionTitle || payload.job.title;
   const place = payload.job.position?.placeOfAssignment ?? null;
   const sectionCls = (extra: string) => (bounded ? `${extra} ${boundedSectionCls}` : extra);
@@ -1530,10 +1564,9 @@ export function ReviewWorkspace({
         <RequirementsMatchPanel report={payload.requirements} />
         <CredentialsRow payload={payload} />
 
-        <div className={`rounded-lg bg-white p-4 text-sm ${banner.cls}`}>
-          <StatusPill status={payload.status} className="mr-2" />
-          {banner.text}
-        </div>
+        {/* (The standalone "Applied · Awaiting review." banner was removed —
+            the dossier header already carries the live status pill, so the
+            rail goes straight to the decision actions.) */}
 
         {(stage === "Applied" || stage === "Under Review") && (
           <div className="dlg-card space-y-3 p-4">
@@ -1542,27 +1575,32 @@ export function ReviewWorkspace({
               <h3 className="text-[15px] font-medium leading-6 text-ink">Decision</h3>
             </div>
             <div className="space-y-2">
+              {/* Status-colored actions — each button wears the color of the
+                  pipeline status it produces (blue → Under Review, green →
+                  Shortlisted, red → Rejected). */}
               {stage === "Applied" && (
-                <button type="button" className={ghostBtn + " w-full"} onClick={() => openConfirm("Under Review")}>
-                  <ScanSearch className="h-4 w-4 text-[var(--warn)]" aria-hidden />
+                <button type="button" className={ctaBtn + " w-full"} onClick={() => openConfirm("Under Review")}>
+                  <ScanSearch className="h-4 w-4" aria-hidden />
                   Start Review
                 </button>
               )}
-              <button type="button" className={ctaBtn + " w-full"} onClick={() => setDecisionKind("Shortlisted")}>
-                <CheckCircle2 className="h-4 w-4 text-[var(--ok)]" aria-hidden />
+              <button type="button" className={ctaOkBtn + " w-full"} onClick={() => setDecisionKind("Shortlisted")}>
+                <CheckCircle2 className="h-4 w-4" aria-hidden />
                 Shortlist
               </button>
               <button
                 type="button"
-                className={cn(ghostBtn, ghostBadModifier, "w-full")}
+                className={ctaBadBtn + " w-full"}
                 onClick={() => setDecisionKind("Rejected")}
               >
-                <XCircle className="h-4 w-4 text-[var(--bad)]" aria-hidden />
+                <XCircle className="h-4 w-4" aria-hidden />
                 Not Qualified
               </button>
             </div>
             <p className="text-xs text-stone">
-              {email ? `Decisions email ${email}.` : "No email on record for this applicant."}
+              {email
+                ? `Decision notices will be emailed to ${email}.`
+                : "No email on record; HR will contact the applicant directly."}
             </p>
           </div>
         )}
@@ -1576,7 +1614,7 @@ export function ReviewWorkspace({
             <p className="text-xs text-stone">Changing the decision notifies the applicant.</p>
             <button
               type="button"
-              className={cn(ghostBtn, "w-full", stage === "Shortlisted" && ghostBadModifier)}
+              className={cn(ghostBtn, "w-full", stage === "Shortlisted" ? ghostBadModifier : ghostOkModifier)}
               onClick={() =>
                 stage === "Shortlisted"
                   ? setConfirmAction({
@@ -1635,7 +1673,10 @@ export function ReviewWorkspace({
             {notices === null ? (
               <p className="text-xs text-stone">Loading…</p>
             ) : notices.length === 0 ? (
-              <p className="text-xs text-stone">No notices sent yet.</p>
+              <p className="flex items-center gap-1.5 text-xs text-stone">
+                <Mails className="h-3.5 w-3.5 shrink-0 text-pebble" aria-hidden />
+                No notices sent yet.
+              </p>
             ) : (
               notices.map((n) => (
                 <div key={n.id} className="flex flex-wrap items-center justify-between gap-2 text-xs">
