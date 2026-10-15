@@ -783,3 +783,22 @@ Work Log:
 Stage Summary:
 - Commit (Task 10-e); working tree clean.
 - The Jobs table now speaks the same status ladder with the same official badges as the rest of the system, driven by one resolver (jobStatusView) so table, board and workspace header can never drift again.
+
+---
+Task ID: 11
+Agent: Z.ai Code (main agent)
+Task: Move "Send interview invitations (4)" off the Review Queue kanban into Jobs (table) and Jobs Pipeline, so only the shortlisted applicants of THAT specific job get emailed (the queue version emailed every shortlisted applicant across all postings).
+
+Work Log:
+- Surveyed the existing flow: the global button lived on review-queue.tsx stage tabs, fed by a cross-job shortlistedIds memo (4 ids across 2 postings — the "(4)" the user saw); NoticeFormDialog (review-workspace.tsx) already supports bulkIds + bulkContextLabel and posts to /api/evaluator/applications/invitations, which hard-skips non-shortlisted server-side. Queue API has no jobId filter; /api/jobs GET is PUBLIC so shortlist counts must never ride it.
+- review-queue.tsx: removed the bulkNotice state, the "Send interview invitations (N)" pill, the composer mount, the shortlistedIds memo, and the Video/NoticeFormDialog imports; header comment records the relocation. Bulk REGRET letters untouched (user asked only about invitations).
+- recruitment.tsx (Jobs table): load() now fetches /api/evaluator/queue?pageSize=100 in parallel (allSettled-style .catch(() => null) — jobs table still loads if the queue fails); shortlistedByJob memo maps jobId → shortlisted application ids; desktop actions column gained a Video icon button between View and Edit (width 110→150px), disabled at zero shortlist with "No shortlisted applicants yet" tooltip, enabled shows "(N shortlisted)"; clicking opens the shared NoticeFormDialog with bulkIds = that posting's cohort and bulkContextLabel = posting title. Mobile keeps the 2-action set (358px column budget can't fit a third button; documented — the pipeline tab covers mobile).
+- job-workspace.tsx (Pipeline tab): "Send interview invitations (N)" metric-blue pill above the board (same styling as the old queue button), N = pipeline["Shortlisted"].length, composer scoped to this job with job.title as context label; Overview/Candidates tabs deliberately untouched.
+- End-to-end scoping proof with a mocked endpoint (agent-browser network route): job 2 ("Science Research Specialist I") composer posted applicationIds [2,12]; job 1 ("Supervising Science Research Specialist") posted [11,13] — exactly the per-job cohorts, zero cross-job ids; then unmocked. Ground truth from the queue API: 4 shortlisted total across both jobs (the old global "(4)").
+- Browser verification: desktop 1440×900 — table rows show 3 actions with disabled invite where shortlist = 0 (Electronics Technician, Administrative Assistant I), enabled (2 shortlisted) on the two with shortlists; dialog copy reads "…to 2 shortlisted applicants — <posting>"; pipeline tab pill "(2)" above the kanban; review queue stage tabs show NO invite button (Shortlisted 4 tab present, action gone); overview tab's pipeline panel properly hidden (Radix inactive panel, offsetParent null). Mobile 390×844 — table unchanged 3-column with no overflow, pipeline pill fits, composer dialog opens without horizontal overflow.
+- Screenshots: .verify/11-jobs-table-invite-actions.png, 11-invite-dialog-scoped.png, 11-pipeline-tab-invite.png, 11-review-queue-no-invite.png, 11-mobile-jobs-table.png, 11-mobile-pipeline-invite.png, 11-mobile-invite-dialog.png.
+- bun run lint clean; dev.log clean.
+
+Stage Summary:
+- Commit (Task 11); working tree clean.
+- Interview invitations are now per-posting everywhere: Jobs table row action + Pipeline tab pill, each fanning out ONLY to that job's shortlisted applicants; the risky cross-job bulk send is gone from the Review Queue. Idempotency, shortlist hard-skip, and the single-id → single-notice fallback all ride the untouched shared dialog/endpoints.
