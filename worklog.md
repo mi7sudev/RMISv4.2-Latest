@@ -731,3 +731,20 @@ Work Log:
 Stage Summary:
 - Commit (Task 10-b); working tree clean.
 - The create/edit job dialog is now 1024px wide on desktop (max-w-5xl) — a little more room as requested — while the mobile experience is byte-identical to before.
+
+---
+Task ID: 10-c
+Agent: Z.ai Code (main agent)
+Task: Create-job dialog — width still not enough on wide desktop screens (good on laptops, "kinda short" on wider desktop monitors).
+
+Work Log:
+- Diagnosis: the dialog was a FIXED max-w-5xl (1024px) for every desktop size — on a 1920px monitor that is only 53% of the viewport, which is exactly the "kinda short" feeling; laptops (1280–1535) are fine per the user.
+- src/components/views/recruitment.tsx DialogContent: added 2xl:w-[80vw] + 2xl:max-w-[90rem] (capped 1440px) after sm:max-w-5xl — three tiers now: mobile full width < sm, 1024px from sm (laptop sweet spot, unchanged), 80vw capped 1440px from 2xl (proportional on wide monitors). MOM comments (file header + dialog frame) rewritten for the tier model.
+- Browser-verified width matrix (agent-browser, evaluator Create Job dialog): 390×844 → 358px (unchanged); 1440×900 laptop → 1024px (unchanged, as the user said laptops are good); 1920×1080 desktop → 1440px = 75% of viewport (up from 53%); 2560×1440 ultrawide → 1440px (sensible cap so the form never stretches absurdly). 1920px screenshot shows the two-column panels + full-width vitals/description fields filling the frame with the pinned header/footer intact.
+- Shared JobFormDialog → ADMIN and EVALUATOR inherit identically (create + edit).
+- Screenshots: .verify/10c-create-widescreen-1920.png, 10c-create-widescreen-2560.png.
+- bun run lint clean; dev.log clean for this session.
+
+Stage Summary:
+- Commit (Task 10-c); working tree clean.
+- The create/edit job dialog now scales with the screen: laptops keep the 1024px the user called good, wide desktop monitors (≥1536px) get a proportional 80vw frame capped at 1440px — on a 1920px screen the dialog grew from 53% to 75% of the viewport.
