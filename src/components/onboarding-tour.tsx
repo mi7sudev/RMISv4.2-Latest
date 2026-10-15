@@ -12,9 +12,18 @@
 // Task 20 — steps whose target is missing or display:none at the current
 // viewport (the home's Job Openings pane is desktop-only now) are skipped
 // automatically instead of spotlighting empty space.
+// Task 15 — the spotlight ring + coach card now render through a PORTAL to
+// document.body. Below lg the workspace shell wraps pages in a
+// PullToRefresh scroller whose inner layer carries will-change:transform —
+// that turns the layer into a CONTAINING BLOCK for position:fixed, so the
+// spotlight/coach silently anchored to it (the coach landed ~1800px above
+// the viewport on the profile page's phone layout). Portaling to body
+// anchors both elements to the real viewport on every screen; the welcome
+// dialog was already safe (Radix portals its own overlay).
 // ============================================================================
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Compass } from "lucide-react";
 import {
   Dialog,
@@ -184,7 +193,11 @@ export default function OnboardingTour({
       return { top: "50%", left: "50%", transform: "translate(-50%,-50%)" } as React.CSSProperties;
     }
     const CARD_W = 340;
-    const CARD_H_EST = 200;
+    // Task 15 — raised from 200: the measured coach card runs ~258px tall
+    // with a full step body on a 390px phone, so the 200px estimate let the
+    // card overlap the spotlighted element's top edge. 280 keeps the card
+    // clear of the target on phones; the "fits below" check scales with it.
+    const CARD_H_EST = 280;
     const below = rect.top + rect.height + 12;
     const above = rect.top - CARD_H_EST - 12;
     const top = below + CARD_H_EST < window.innerHeight - 16 ? below : Math.max(16, above);
@@ -197,81 +210,84 @@ export default function OnboardingTour({
 
   return (
     <>
-      {/* Spotlight + dim (active phase) */}
-      {phase === "active" && (
-        <div
-          className="pointer-events-none fixed z-[70]"
-          style={{
-            top: (rect?.top ?? 0) - PAD,
-            left: (rect?.left ?? 0) - PAD,
-            width: (rect?.width ?? 0) + PAD * 2,
-            height: (rect?.height ?? 0) + PAD * 2,
-            borderRadius: 20,
-            boxShadow: "0 0 0 9999px rgba(31, 32, 37, 0.55), 0 0 0 4px rgba(255,255,255,0.9)",
-            transition: "all 260ms cubic-bezier(0.22,1,0.36,1)",
-          }}
-          aria-hidden="true"
-        />
-      )}
+      {/* Spotlight + dim + coach card — Task 15: portal to document.body so
+          the fixed positioning is viewport-anchored even inside transformed
+          ancestors (the mobile PullToRefresh scroller layer). */}
+      {phase === "active" &&
+        createPortal(
+          <>
+            <div
+              className="pointer-events-none fixed z-[70]"
+              style={{
+                top: (rect?.top ?? 0) - PAD,
+                left: (rect?.left ?? 0) - PAD,
+                width: (rect?.width ?? 0) + PAD * 2,
+                height: (rect?.height ?? 0) + PAD * 2,
+                borderRadius: 20,
+                boxShadow: "0 0 0 9999px rgba(31, 32, 37, 0.55), 0 0 0 4px rgba(255,255,255,0.9)",
+                transition: "all 260ms cubic-bezier(0.22,1,0.36,1)",
+              }}
+              aria-hidden="true"
+            />
 
-      {/* Coach card */}
-      {phase === "active" && (
-        <div
-          key={`${index}-${tick}`}
-          role="dialog"
-          aria-modal="false"
-          aria-label={`Tour step ${index + 1} of ${steps.length}: ${step.title}`}
-          className="dlg-card-plain fixed z-[71] animate-in fade-in slide-in-from-bottom-2 duration-200 p-5 shadow-e4"
-          style={cardStyle}
-        >
-          <p className="eyebrow">
-            Step {index + 1} of {steps.length}
-          </p>
-          <h2 className="mt-1.5 text-base font-medium text-ink">{step.title}</h2>
-          <p className="mt-1.5 text-sm leading-relaxed text-body-gray">{step.body}</p>
-          <div className="mt-4 flex items-center justify-between gap-2">
-            <button
-              type="button"
-              onClick={finish}
-              className="min-h-[36px] text-xs text-stone underline underline-offset-2 hover:text-ink"
+            <div
+              key={`${index}-${tick}`}
+              role="dialog"
+              aria-modal="false"
+              aria-label={`Tour step ${index + 1} of ${steps.length}: ${step.title}`}
+              className="dlg-card-plain fixed z-[71] animate-in fade-in slide-in-from-bottom-2 duration-200 p-5 shadow-e4"
+              style={cardStyle}
             >
-              Skip tour
-            </button>
-            <div className="flex items-center gap-2">
-              {index > 0 && (
+              <p className="eyebrow">
+                Step {index + 1} of {steps.length}
+              </p>
+              <h2 className="mt-1.5 text-base font-medium text-ink">{step.title}</h2>
+              <p className="mt-1.5 text-sm leading-relaxed text-body-gray">{step.body}</p>
+              <div className="mt-4 flex items-center justify-between gap-2">
                 <button
                   type="button"
-                  onClick={() => {
-                    prevIndexRef.current = index;
-                    dirRef.current = -1;
-                    setIndex((i) => Math.max(0, i - 1));
-                    setTick((t) => t + 1);
-                  }}
-                  className="dlg-ghost min-h-[36px] px-4 text-xs"
+                  onClick={finish}
+                  className="min-h-[36px] text-xs text-stone underline underline-offset-2 hover:text-ink"
                 >
-                  Back
+                  Skip tour
                 </button>
-              )}
-              <button
-                type="button"
-                autoFocus
-                onClick={() => {
-                  if (last) finish();
-                  else {
-                    prevIndexRef.current = index;
-                    dirRef.current = 1;
-                    setIndex((i) => i + 1);
-                    setTick((t) => t + 1);
-                  }
-                }}
-                className="dlg-cta min-h-[36px] px-5 text-xs font-medium"
-              >
-                {last ? "Finish" : "Next"}
-              </button>
+                <div className="flex items-center gap-2">
+                  {index > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        prevIndexRef.current = index;
+                        dirRef.current = -1;
+                        setIndex((i) => Math.max(0, i - 1));
+                        setTick((t) => t + 1);
+                      }}
+                      className="dlg-ghost min-h-[36px] px-4 text-xs"
+                    >
+                      Back
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    autoFocus
+                    onClick={() => {
+                      if (last) finish();
+                      else {
+                        prevIndexRef.current = index;
+                        dirRef.current = 1;
+                        setIndex((i) => i + 1);
+                        setTick((t) => t + 1);
+                      }
+                    }}
+                    className="dlg-cta min-h-[36px] px-5 text-xs font-medium"
+                  >
+                    {last ? "Finish" : "Next"}
+                  </button>
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
-      )}
+          </>,
+          document.body
+        )}
 
       {/* Welcome dialog */}
       <Dialog

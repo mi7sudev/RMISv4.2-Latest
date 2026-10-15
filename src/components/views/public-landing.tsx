@@ -3,9 +3,9 @@
 // ============================================================================
 // RMIS — Public landing (spec §7.1): a two-pane job explorer in the
 // reference-board style — TOP: a Bevel "Hero Sky" rounded-32 gradient field
-// carrying the display headline + the agency authority line (the hero CTA
-// and the header board link were retired per user direction — browsing
-// happens right here); LEFT: a single-line [search bar] + [Sort] filter
+// carrying the display headline (Task 15: the agency authority line was
+// removed — the sticky header's two-logo lockup carries the attribution —
+// and the field's padding stepped down); LEFT: a single-line [search bar] + [Sort] filter
 // (the board's mobile-Job-Openings pattern: title / item no. / division
 // needle, Newest · Deadline · Salary trio) over a register of Cloud Card
 // job cards (title · division name · place · salary · clamped snippet · posted
@@ -590,12 +590,14 @@ export default function PublicLanding() {
       <main className="mx-auto w-full max-w-[1600px] flex-1 px-4 pb-10 pt-6 sm:px-6 lg:px-8">
         {/* Hero — "Hero Sky" wash field (rounded-3xl = 24px editorial imagery step) anchoring the explorer:
             the Jeton heading step (text-display, 44px) keeps the headline
-            institutional rather than poster-scale, then the agency name as
-            the quiet proof strip (QA: the emblem itself was dropped — the
-            sticky header already carries the DOST mark, and a second one 40px
-            below read as a duplicate), then the single .dlg-cta RMIS Electric
-            Blue capsule CTA (real marks only). */}
-        <section className="hero-sky rounded-3xl p-6 sm:p-8 lg:px-10 lg:py-10">
+            institutional rather than poster-scale, then the single .dlg-cta
+            RMIS Electric Blue capsule CTA (real marks only).
+            Task 15 — the "Metals Industry Research and Development Center"
+            authority line is gone (the sticky header's two-logo lockup already
+            carries the full agency attribution) and the field's vertical
+            padding stepped down (p-4 / sm:p-6 / lg:py-8) so the board starts
+            higher on every screen. */}
+        <section className="hero-sky rounded-3xl p-4 sm:p-6 lg:px-10 lg:py-8">
           {/* QA 2026-02: header renamed to "Job Opportunities" to match the
               Positions tab; the live "N open" pill was removed — it read as
               an unclickable button. Task 13 — phones step the heading down
@@ -605,14 +607,6 @@ export default function PublicLanding() {
           <h1 className="text-[30px] font-display leading-[1.2] tracking-[0.44px] sm:text-display">
             Job Opportunities
           </h1>
-          {/* Institutional proof — agency name only; the emblem lives in the
-              sticky header directly above, so repeating it here read as a
-              duplicate seal (user QA). */}
-          <div className="mt-4">
-            <p className="min-w-0 text-sm font-medium leading-snug text-ink">
-              Metals Industry Research and Development Center
-            </p>
-          </div>
         </section>
 
         <Alert variant="destructive" open={error !== null} className="mt-6">

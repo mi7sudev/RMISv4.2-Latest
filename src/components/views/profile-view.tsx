@@ -58,6 +58,7 @@ import TrainingSection from "./profile/training-section";
 import EligibilitySection from "./profile/eligibility-section";
 import AwardsSection from "./profile/awards-section";
 import DocumentsSection from "./profile/documents-section";
+import OnboardingTour from "@/components/onboarding-tour";
 import type { ApplicantProfile, ReferenceData } from "./profile/section-types";
 
 const SECTIONS = [
@@ -686,6 +687,25 @@ export default function ProfileView() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Task 15 — profile guided tour: one focused step spotlighting the
+          optional "Auto-fill from PDS" card at the foot of the page (the
+          upload-PDS entry point). The card renders on desktop AND mobile
+          (always last in the flow), so the single [data-tour] hook covers
+          both viewports; OnboardingTour auto-scrolls the target into view
+          and remembers the dismissal per browser. */}
+      <OnboardingTour
+        storageKey="rmis.tour.profile.v1"
+        title="Quick tip before you start"
+        description="You can build your Personal Data Sheet by hand — or let RMIS do the heavy lifting from an uploaded PDS. You can skip this tip anytime."
+        steps={[
+          {
+            selector: '[data-tour="pds-upload"]',
+            title: "Auto-fill from PDS",
+            body: "Already have a filled CS Form 212? Expand this card and upload it — RMIS reads your PDS and pre-fills every section for you. Prefer typing? Just fill the forms manually; this step is optional.",
+          },
+        ]}
+      />
     </div>
   );
 }

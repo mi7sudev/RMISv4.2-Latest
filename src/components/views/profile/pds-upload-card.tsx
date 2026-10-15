@@ -257,6 +257,10 @@ export default function PdsUploadCard({
       open={open}
       onOpenChange={setOpen}
       className="dlg-card-plain overflow-hidden"
+      // Task 15 — [data-tour] hook: the profile guided tour spotlights this
+      // collapsed row (the optional "Auto-fill from PDS" entry point) on both
+      // desktop and mobile — it is always rendered at the foot of the page.
+      data-tour="pds-upload"
     >
       {/* Compact resting row — the screenshot look: chip · title · drop hints */}
       <CollapsibleTrigger
