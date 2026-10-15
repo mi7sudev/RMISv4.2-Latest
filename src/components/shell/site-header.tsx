@@ -44,8 +44,16 @@ export function SiteHeader() {
           aria-label="RMIS — Recruitment Management Information System home"
         >
           {/* Official unified brand mark — DOST pinwheel + MIRDC gear crest
-              in a single emblem (see brand-logo). Floats on the capsule. */}
-          <BrandLogo logoSize={32} />
+              in a single emblem (see brand-logo). Mounted on the porcelain
+              chip (same convention as the jobs board card and the auth brand
+              panel): on the white capsule the seal's white center square
+              otherwise melts into the surface and the gear crest reads as
+              floating on the pinwheel. The circle chip + hairline border
+              gives the emblem a defined footprint that echoes the pill. */}
+          <BrandLogo
+            logoSize={36}
+            className="rounded-full border border-divider/70 bg-white shadow-[0_1px_2px_rgba(11,24,34,0.08)]"
+          />
           <span className="hidden min-w-0 text-balance text-left text-[15px] font-medium leading-tight tracking-[0.01em] text-ink sm:block">
             {RMIS_FULL_NAME}
           </span>
