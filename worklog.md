@@ -611,3 +611,18 @@ Work Log:
 
 Stage Summary:
 - The status pill can no longer strand alone on a wrapped header row — it is part of the identity line, the profile link is deterministically right-anchored, and the meta reads as an aligned subtitle across page-style, modal, and mobile surfaces.
+
+---
+Task ID: 10
+Agent: Z.ai Code (main agent)
+Task: User QA (screenshot) — the Applied/Under Review status badges render a paper-plane ("send message") glyph, identically on both stages, across the Review Queue filter chips and Analytics. Directive: study and standardize status badges/icons across the ENTIRE system (evaluator + admin pages, tables, navs, filters).
+
+Work Log:
+- Root cause audit: the paper plane came from the "info" variant glyph — STATUS_DOT_GLYPH.info = Send (shell.tsx), the CSS mask .status-pill.status-info (send SVG, globals.css), and the journey modal's Apply step (rail-journey-info.tsx). Applied and Under Review deliberately share the blue info TINT (TONE_TO_VARIANT.primary→info, STAGE_VARIANT), so both stages drew the identical plane everywhere a variant-driven glyph rendered. AnimatedBadge (StatusPill) was already info=(i) — dots vs pills disagreed too.
+- Canonical vocabulary (single source in lib/status-ui.ts): STAGE_GLYPH = Applied→Inbox (received), Under Review→ScanSearch (being screened, mirrors the Start Review CTA), Shortlisted→Check, Rejected→X. PILL_STAGE_GLYPH record (+ glyphForStatus helper) re-points the two blue status FAMILIES on badges (applied/pending/submitted → Inbox; under review/for evaluation/screening/evaluation/final review/evaluated/in review → ScanSearch). StatusDot gained a glyph prop; StageDot, analytics funnel + donut legend, candidates mini-pipeline, candidate-detail rows and job-workspace pipeline headers all pass stage glyphs; StatusPill overlays the stage glyph on AnimatedBadge (static record lookup — react-hooks/static-components rejects JSX types from calls; pulse badges keep their spinner).
+- CSS: .status-pill.status-info mask send→(i) circle; comments updated. Journey modal: Apply step Send→Inbox. Send now means only real send actions (email composer, regret letters, SMS test, submit buttons).
+- Browser-verified 9 surfaces: queue filter chips (user's screenshot), queue kanban columns, queue table status pills, analytics funnel + status-distribution legend, candidates kanban, candidate-detail application rows + header pills, job-workspace pipeline, admin dashboard recent-activity pills, applicant journey modal. Applied/Under Review now visually distinct on every surface; hue language unchanged.
+- bun run lint clean (fixed one static-components error along the way); dev.log clean; committed 08acd96.
+
+Stage Summary:
+- One stage → one glyph, system-wide: Applied=Inbox · Under Review=ScanSearch · Shortlisted=Check · Rejected=X, on every dot, pill, filter chip, funnel and pipeline across evaluator, admin and applicant surfaces; the info variant speaks (i) and the paper plane is reserved for genuine send actions.
