@@ -18,6 +18,14 @@
 // --bad red → Rejected pill); "Credentials on file" is a 2-column icon
 // grid instead of wrapping pill chips; Notices / Direct email cards carry
 // icon-led meta rows and quieter empty states.
+// Rail polish 2 (user QA 2026-02): "Requirements match" cards now lead with
+// their category (Education / Experience / Training / Eligibility) — the old
+// layout buried the dimension in a bottom-right chip that read like a stray
+// word after the content — and a segmented scorecard meter visualizes
+// "N of M standards met" (one segment per relevant check, colored by its
+// status). Dimensions that are not required collapse to a single muted line
+// under a "Not required for this posting" caption, killing the old
+// "None required" + "Not required" double-say.
 // Bevel pass: shared page header with round back affordance, white dossier
 // panel with cloud/60 snapshot tiles + capsule tabs, cloud decision-rail
 // cards with white/70 interior tiles, brand-blue links, blue decision
@@ -84,7 +92,7 @@ import { getStatusMeta, stageForStatus } from "@/lib/status";
 import { pillClass, type StatusVariant } from "@/lib/status-ui";
 import { navigate, useHashRoute } from "@/lib/router";
 import { cn } from "@/lib/utils";
-import type { RequirementsReport } from "@/lib/requirements";
+import type { RequirementCheck, RequirementsReport } from "@/lib/requirements";
 
 // ── Wire shapes (GET /api/evaluator/applications/[id]) ──────────────────────
 
@@ -184,6 +192,25 @@ function checkChip(status: string): { icon: typeof Check; tone: ChipTone } {
       return { icon: Minus, tone: "slate" };
   }
 }
+
+/** Requirement dimension → display label + icon (same icon vocabulary as
+    the Credentials on file grid and the dossier tabs). */
+const DIMENSION_META: Record<
+  RequirementCheck["dimension"],
+  { label: string; icon: typeof GraduationCap }
+> = {
+  education: { label: "Education", icon: GraduationCap },
+  experience: { label: "Experience", icon: BriefcaseBusiness },
+  training: { label: "Training", icon: BookOpen },
+  eligibility: { label: "Eligibility", icon: BadgeCheck },
+};
+
+/** Scorecard meter segment color per check status. */
+const SEGMENT_COLOR: Record<string, string> = {
+  MET: "var(--ok)",
+  NOT_MET: "var(--bad)",
+  REVIEW: "var(--warn)",
+};
 
 function str(v: unknown): string {
   if (v === null || v === undefined) return "";
@@ -346,6 +373,8 @@ function checkPill(status: string): { label: string; variant: StatusVariant } {
 
 function RequirementsMatchPanel({ report }: { report: RequirementsReport }) {
   const meaning = VERDICT_MEANING[report.verdict] ?? "";
+  const relevant = report.checks.filter((c) => c.status !== "NOT_REQUIRED");
+  const notRequired = report.checks.filter((c) => c.status === "NOT_REQUIRED");
   const allMet = report.requiredCount > 0 && report.metCount === report.requiredCount;
   const summaryCls = allMet ? "text-[var(--ok)]" : report.metCount > 0 ? "text-[var(--warn)]" : "text-stone";
   return (
@@ -360,38 +389,86 @@ function RequirementsMatchPanel({ report }: { report: RequirementsReport }) {
         </div>
         <VerdictPill verdict={report.verdict} className="shrink-0" />
       </div>
-      <p className={cn("num mt-2 text-sm font-medium", summaryCls)}>
-        {report.metCount} of {report.requiredCount} standards met
-      </p>
-      {report.checks.length > 0 && (
-        <div className="mt-3 max-h-96 space-y-2.5 overflow-y-auto scroll-thin pr-1">
-          {report.checks.map((c, i) => {
+      {/* Scorecard meter — one segment per relevant check, colored by its
+          status, so "2 of 2 standards met" is visible at a glance. */}
+      {report.requiredCount > 0 && (
+        <div className="mt-3 flex items-center gap-3">
+          <div
+            className="flex min-w-0 flex-1 gap-1"
+            role="img"
+            aria-label={`${report.metCount} of ${report.requiredCount} standards met`}
+          >
+            {relevant.map((c, i) => (
+              <span
+                key={i}
+                className="h-1.5 flex-1 rounded-full"
+                style={{ background: SEGMENT_COLOR[c.status] ?? "var(--fog)" }}
+              />
+            ))}
+          </div>
+          <p className={cn("num shrink-0 text-[13px] font-medium", summaryCls)}>
+            {report.metCount} of {report.requiredCount} standards met
+          </p>
+        </div>
+      )}
+      {report.checks.length > 0 ? (
+        <div className="mt-3 max-h-96 space-y-2 overflow-y-auto scroll-thin pr-1">
+          {/* Relevant checks — category leads, status sits at the far end,
+              then the CSC standard and what the applicant has on file. */}
+          {relevant.map((c, i) => {
             const cp = checkPill(c.status);
             const cc = checkChip(c.status);
+            const dim = DIMENSION_META[c.dimension];
             return (
-              <div key={i} className="rounded-lg bg-white/70 p-3.5">
-                <div className="flex items-start gap-2.5">
-                  <IconChip icon={cc.icon} tone={cc.tone} size={22} iconSize={12} className="mt-0.5" />
-                  <p className="min-w-0 flex-1 text-[13px] leading-5 text-ink line-clamp-2">{c.standard || "-"}</p>
+              <div key={i} className="rounded-lg bg-white p-3">
+                <div className="flex items-center gap-2">
+                  <IconChip icon={cc.icon} tone={cc.tone} size={18} iconSize={10} />
+                  <span className="min-w-0 flex-1 truncate text-[10px] font-semibold uppercase tracking-wide text-stone">
+                    {dim.label}
+                  </span>
                   <StatusPill status={cp.label} variant={cp.variant} className="shrink-0" />
                 </div>
-                <p className="num mt-1.5 text-xs leading-5 text-stone line-clamp-2">
+                <p className="mt-1.5 text-[13px] font-medium leading-5 text-ink line-clamp-2">
+                  {c.standard || "-"}
+                </p>
+                <p className="num mt-1 text-xs leading-5 text-stone line-clamp-2">
                   {c.applicantSummary || "No applicant data on file."}
                 </p>
-                <div className="mt-1.5 flex items-center justify-between gap-2">
-                  {c.shortfall ? (
-                    <p className="text-xs text-[var(--bad)]">{c.shortfall}</p>
-                  ) : (
-                    <span aria-hidden />
-                  )}
-                  <span className="dlg-pill shrink-0 rounded-full bg-fog px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-stone">
-                    {c.dimension}
-                  </span>
-                </div>
+                {c.shortfall && (
+                  <p className="mt-1 flex items-start gap-1 text-xs leading-5 text-[var(--bad)]">
+                    <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" aria-hidden />
+                    <span className="min-w-0">{c.shortfall}</span>
+                  </p>
+                )}
               </div>
             );
           })}
+          {/* Dimensions the posting does not require collapse to one muted
+              line each — no more "None required" + "Not required" double-say. */}
+          {notRequired.length > 0 && (
+            <div className="rounded-lg bg-white/60 px-3 py-2.5">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-pebble">
+                Not required for this posting
+              </p>
+              <div className="mt-1.5 space-y-1.5">
+                {notRequired.map((c, i) => {
+                  const dim = DIMENSION_META[c.dimension];
+                  return (
+                    <div key={i} className="flex items-center gap-2">
+                      <dim.icon className="h-3.5 w-3.5 shrink-0 text-pebble" aria-hidden />
+                      <span className="shrink-0 text-xs font-medium text-stone">{dim.label}</span>
+                      <span className="num min-w-0 truncate text-right text-xs text-pebble">
+                        {c.applicantSummary || "—"}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
+      ) : (
+        <p className="mt-3 text-xs text-stone">No published standards to check.</p>
       )}
     </div>
   );
