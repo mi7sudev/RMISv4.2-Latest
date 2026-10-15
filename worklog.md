@@ -528,3 +528,21 @@ Work Log:
 
 Stage Summary:
 - Auth brand panel is now letterhead + motto + fact ledger only; both user-named sections are gone across sign-in, sign-up and reset-password.
+
+---
+Task ID: 7
+Agent: Z.ai Code (main agent)
+Task: Match the applicant-facing notice emails to the office's REAL HR emails (two upload samples: single interview invitation Jul 2026 + multi-stage one-day invitation Sep 2026).
+
+Work Log:
+- Gap analysis: old interview/skills-exam templates used "Dear {name},", bare position title, no PDF instruction, "Please bring your original credentials" filler, no thank-you closer, "MIRDC HR Office" alias signature, and a "Please do not reply" footer that contradicted the confirm-by-reply body.
+- notify.ts: added the official HR signature block (env-overridable: RMIS_HR_SIGNATORY / _POSITION / _DIVISION / _UNIT / _TELEPHONE — defaults are the office's signatory of record from the sample), an official emailShell footer (DOST-MIRDC office lockup, no "do not reply"), and ISO→display formatters (2026-07-30 → "July 30, 2026 (Thursday)"; 13:00 → "1:00 PM").
+- Interview invitation rewritten to sample 1: "Dear Applicant:" · position WITH item number · Date/Time/Interview Mode/Venue rows · the one-(1)-PDF-file instruction paragraph · confirm-by-reply with automatic-removal clause · "Thank you very much!" · signature block. Skills-exam template brought to the same convention.
+- NEW multi-stage (one-day process) edition per sample 2: when the details carry 2+ stages the email switches to "next stages of the recruitment process" — overall Date, numbered stage blocks (title/Time/Venue), IMPORTANT REMINDER (one-day process, no alternate schedule, MIRDC Selection Board rescheduling clause), work-suspension rescheduling paragraph, "Thank you."
+- noticeSchema gains optional extraStages (title required, time/venue optional, max 5); both notice routes (single + bulk) build stage 1 from the main fields and pass extraStages through; both routes now cite the position with its item number ("Science Research Specialist I (MIRDC-SC1-5-2006)").
+- NoticeFormDialog (single + bulk send share it): "Additional stages (one-day process)" repeater — title/time/venue rows, add/remove, payload extraStages.
+- Verified: scripts/preview-notice-email.ts renders both editions (text matches the samples line-for-line; HTML flags officialFooter/signature/no-noReply). Browser E2E as testevaluator: candidate #2 (Shortlisted) → Send Interview Invitation → added "Psychological Assessment 1:00 PM - 3:00 PM" stage → sent; email_log row "Interview invitation: Science Research Specialist I (MIRDC-SC1-5-2006)" + in-app Notice created; dialog closed cleanly. lint clean, dev.log clean.
+- Committed as 9899f71 (notify.ts, validation.ts, 2 routes, review-workspace.tsx, preview script, .env docs).
+
+Stage Summary:
+- Applicant-facing invitation emails now read exactly like the office's real HR correspondence, including the named signatory block; a one-day multi-stage schedule (interview + assessment) is fully supported end to end (UI → schema → template).
