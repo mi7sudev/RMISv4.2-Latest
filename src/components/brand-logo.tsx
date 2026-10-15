@@ -2,12 +2,13 @@ import { cn } from "@/lib/utils";
 
 // ============================================================================
 // RMIS — Official brand mark. A single unified emblem (MIRDC-mark.png): the
-// DOST pinwheel (ink + azure quadrants) carrying the MIRDC gear crest in its
-// white heart. The source PNG is square 383×383 with a TRANSPARENT background,
-// so the mark floats directly on the surface behind it (white on the public
-// header, ink strip on mobile, light auth cards). `tone` is retained for API
-// compatibility with existing call sites but is now a no-op — the unified mark
-// carries no divider hairline.
+// MIRDC quatrefoil — black + azure circular quadrants framing a white heart
+// that carries the MIRDC gear crest (robot arm pouring molten metal). The
+// source PNG is square 383×383 with a TRANSPARENT background, so the mark
+// floats directly on the surface behind it (white on the public header, ink
+// strip on mobile, light auth cards). `tone` is retained for API
+// compatibility with existing call sites but is now a no-op — the unified
+// mark carries no divider hairline.
 // ============================================================================
 
 export function BrandLogo({

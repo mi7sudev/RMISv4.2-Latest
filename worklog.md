@@ -432,3 +432,19 @@ Stage Summary:
 - RMIS 2.0 is now our own project at /home/z/my-project, fully seeded and verified running on port 3000
 - Demo logins (password123): testadmin (ADMIN) / testevaluator (EVALUATOR) / testapplicant + persona applicants
 - Env: mock email/SMS (logged to DB), intranet gate off, z-ai-web-dev-sdk wired for scanned-PDF/resume extraction
+
+---
+Task ID: 2
+Agent: Z.ai Code (main)
+Task: Update the header logo to the uploaded mirdc-logo.png
+
+Work Log:
+- Verified upload at /home/z/my-project/upload/mirdc-logo.png (898×529 RGBA, transparent background) — contains two variants: plain quatrefoil pattern (left) and the complete seal with MIRDC gear crest (right)
+- Probed pixel bounds with sharp: right emblem spans x453-835, y63-445 → exactly 383×383, matching the current mark's canonical square format
+- Cropped the right (gear-crest) emblem and replaced public/MIRDC-mark.png (old file backed up to /tmp/MIRDC-mark-backup.png); original upload left untouched
+- No code changes required — both call sites (brand-logo.tsx header/nav/auth lockups + layout.tsx favicon) serve the replaced file; updated the brand-logo.tsx doc comment to describe the new mark
+- Agent Browser verified all placements: public header (22px crisp), sign-in brand panel, signed-in nav rail, mobile (iPhone 14) header, favicon (200, 35750 bytes = new asset)
+- Committed the change
+
+Stage Summary:
+- Header logo (and favicon) now uses the uploaded MIRDC seal; all render paths verified in browser on desktop + mobile
