@@ -49,8 +49,11 @@ UPLOAD_DIR=/home/rmis-mirdc/Desktop/RMISv4.1/upload
 INTRANET_ENFORCEMENT=on
 EMAIL_PROVIDER=middleware
 EMAIL_MIDDLEWARE_URL=http://10.10.120.43:3232
-EMAIL_MIDDLEWARE_API_KEY=⟪shared relay token⟫
+# Shared relay token — the SAME token the RMISv4.1–v4.4 deployments used
+# (matches the mirdc_middleware VM; office-internal only, not exposed publicly).
+EMAIL_MIDDLEWARE_API_KEY=78e69d5bef243d02d0a4151a862c273f3897f5eb4fbce9ed8a2c2378aae94337
 EMAIL_MIDDLEWARE_SYSTEM=DOST-MIRDC Recruitment
+SMS_PROVIDER=mock
 ```
 
 Rules learned the hard way:
@@ -58,6 +61,7 @@ Rules learned the hard way:
 - `custom.db` is refused by name in production; production data is `db/production-data.db` (copied from the bundle's tested `custom.db` on first deploy).
 - After ANY `.env` change: `cp .env .next/standalone/.env && pm2 restart rmis`.
 - The old instance (v3.4 era, pm2 pid 118573) was retired on 2026-09-29; its registrations after the bundle snapshot did **not** carry over.
+- **`EMAIL_PROVIDER=middleware` is REQUIRED in production (2026-10-15).** Self-registered applicant accounts are created unconfirmed and gated behind an emailed 6-digit verification code (see §0.4c) — with any other provider (e.g. `mock`) that email is only logged to `email_logs` and applicants can never complete sign-up. The sandbox `.env` ships with the same middleware block already set; the office VM is unreachable from the sandbox (sends log `failed` there honestly), but on this server the identical config delivers.
 
 ### 0.3 Topology — two tiers, as built
 
@@ -72,6 +76,12 @@ Rules learned the hard way:
 - RMIS → relay contract: `POST /sendMail` with `{ api: ⟨shared token⟩, system: "DOST-MIRDC Recruitment", to, subject, message: ⟨RAW HTML⟩ }` — never send an `html` object (switches the relay into its EJS template that HTML-escapes branded markup); relay sends HTML only (wrap plain-text sends in `<br>`); relay auto-logs every send to the central IT log service (`10.10.120.43:1404`).
 - **Reply-To (Task 14, 2026-10):** RMIS now sends `from: "MIRDC HR Office" <recruitment@mirdc.dost.gov.ph>` (MOM 2026-10-13) AND `replyTo: "MIRDC HR Office" <recruitment@mirdc.dost.gov.ph>` on every message — applicant replies must land in the **recruitment** mailbox, not the system mailer. The relay MUST pass `replyTo` through to nodemailer (a plain `transporter.sendMail(req.body)` passthrough does this). **Verify on the VM after deploy:** send one notice and confirm the received mail's `Reply-To:` header is `recruitment@mirdc.dost.gov.ph`; if the relay pins its own Reply-To (`systems@…`), update the relay's `index.js` (drop-in lives in `deploy/mirdc_middleware/`) to honor `req.body.replyTo`. Override the address with `EMAIL_REPLY_TO` in `.env` if the office ever routes replies elsewhere.
 - Optional hardening (not yet enabled): set `MIDDLEWARE_API_KEY` on the VM to make auth strict — confirm no other consumer breaks first.
+
+### 0.4c Signup email verification (OTP gate — wired to the relay, 2026-10-15)
+
+- Self-registered applicants are created **unconfirmed**; the first sign-in answers 403 "Please verify your email first…" until they enter the 6-digit code emailed at registration (`POST /api/auth/register` → `issueOtp` → `sendEmail` via the **middleware** provider, fire-and-forget). The sign-up card and the sign-in unverified state both offer "Resend code" (3/10 min). Codes live 10 minutes, one active code per email, stored only as sha256(code:pepper) — `src/lib/otp.ts`.
+- **Payload proof (2026-10-15, capturing relay):** the register/resend dispatch carries `{ api: ⟨token⟩, system: "DOST-MIRDC Recruitment", from: "MIRDC HR Office" <recruitment@mirdc.dost.gov.ph>, replyTo: same, to, subject: "Your RMIS verification code: ⟨code⟩", message: ⟨branded HTML⟩, text }` — byte-matches the §0.4 contract, ledger row `provider=middleware, status=sent`.
+- **Post-deploy verification:** register a real address from the applicant door → the code email must arrive within seconds (sender `systems@mirdc.dost.gov.ph`, Reply-To `recruitment@mirdc.dost.gov.ph`) → enter it → auto-login succeeds. If it does not arrive: check `email_logs` (status/error), then `curl http://10.10.120.43:3232/health` from this server.
 
 ### 0.4b Document extraction architecture (which parts need AI)
 
