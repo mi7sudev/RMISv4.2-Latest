@@ -632,21 +632,15 @@ export default function PublicLanding() {
             ))}
           </div>
         ) : openJobs.length === 0 ? (
+          // The "Go to the full positions board" link is gone — the
+          // #/vacant-positions board page is slated for retirement, so the
+          // empty state no longer routes anywhere.
           <div className="dlg-card mt-6">
             <EmptyState
               icon={Inbox}
               title="No open positions right now"
-              description="Check back soon or explore the full board for upcoming announcements."
+              description="Check back soon for upcoming announcements."
             />
-            <div className="pb-8 text-center">
-              <button
-                onClick={() => navigate("vacant-positions")}
-                className="inline-flex min-h-[44px] items-center gap-2 text-sm text-metric-blue underline underline-offset-2 hover:text-ink"
-              >
-                Go to the full positions board
-                <ArrowRight className="h-4 w-4" aria-hidden="true" />
-              </button>
-            </div>
           </div>
         ) : (
           // Viewport-adaptive two-pane board. The posting pane sizes to its
