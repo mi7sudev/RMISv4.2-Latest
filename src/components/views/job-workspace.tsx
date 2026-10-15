@@ -5,13 +5,16 @@
 // count-aware delete confirm, edit dialog; Overview (safe-rendered rich text +
 // sticky summary + mini pipeline), Pipeline kanban, Candidates — all from the
 // evaluator queue filtered to this job.
+// Task 11 (user direction) — the cross-job "Send interview invitations" bulk
+// send moved off the Review Queue: the Pipeline tab now carries the per-posting
+// composer, scoped to THIS job's shortlisted cohort only.
 // ============================================================================
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "@/lib/toast";
 import {
   AlertTriangle, ClipboardList, FileText,
-  Pencil, SquareKanban, Trash2,
+  Pencil, SquareKanban, Trash2, Video,
 } from "lucide-react";
 import { Monogram, PageHeader, RefreshButton, RichSection, SectionCard, StatusDot, StatusPill, EmptyNote, EmptyState, nameInitials } from "@/components/ui/shell";
 import {
@@ -30,6 +33,7 @@ import { STAGE_GLYPH, STAGE_VARIANT } from "@/lib/status-ui";
 import { useFocusRefresh } from "@/lib/use-focus-refresh";
 import { cn } from "@/lib/utils";
 import { JobFormDialog, JobStatusPill } from "@/components/views/recruitment";
+import { NoticeFormDialog } from "@/components/views/review-workspace";
 import { ghostBadModifier, ghostBtn, ghostBadBtn, ctaBtn, iconBtn } from "@/components/ui/buttons";
 
 type QueueRow = {
@@ -63,6 +67,9 @@ export default function JobWorkspace() {
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteBusy, setDeleteBusy] = useState(false);
+  // Task 11 — per-posting bulk interview invitations (moved off the Review
+  // Queue): composer scoped to THIS job's shortlisted cohort.
+  const [bulkInviteOpen, setBulkInviteOpen] = useState(false);
 
   const load = useCallback(
     async (silent = false) => {
@@ -100,6 +107,8 @@ export default function JobWorkspace() {
     for (const r of apps) map[stageForStatus(r.status)].push(r);
     return map;
   }, [apps]);
+  // Task 11 — THIS job's shortlisted application ids for the bulk send.
+  const shortlistedIds = useMemo(() => pipeline["Shortlisted"].map((r) => r.id), [pipeline]);
 
   const deleteJob = async () => {
     if (!job) return;
@@ -266,37 +275,53 @@ export default function JobWorkspace() {
           </div>
         </TabsContent>
 
-        {/* Pipeline — reference board: bordered columns with dot + label + count headers */}
+        {/* Pipeline — reference board: bordered columns with dot + label + count headers.
+            Task 11 — the tab's toolbar carries the per-posting invitation send
+            (moved off the Review Queue): fans out to THIS job's shortlist only. */}
         <TabsContent value="pipeline" className="mt-4">
-          <div className="flex snap-x snap-proximity items-stretch gap-4 overflow-x-auto scroll-thin pb-2 md:grid md:grid-cols-2 xl:grid-cols-4 md:overflow-visible md:pb-0">
-            {PIPELINE_STAGES.map((stage) => {
-              const rows = pipeline[stage];
-              return (
-                <KanbanColumn key={stage} label={stage} stage={stage} count={rows.length}>
-                  {rows.map((app) => {
-                      const position = app.job.position?.positionTitle || app.job.title;
-                      const name = fullName(app.applicant);
-                      return (
-                        <button
-                          key={app.id}
-                          type="button"
-                          className={KANBAN_CARD + " focus-ring w-full cursor-pointer p-4 text-left"}
-                          onClick={() => navigate("evaluator-review", { id: String(app.id) })}
-                          aria-label={`Review application from ${name}`}
-                        >
-                          <KanbanCardBody
-                            name={name}
-                            position={humanize(position)}
-                            appliedLabel={`Applied ${appliedAgo(app.dateApplied)}`}
-                            match={{ metCount: app.match?.metCount ?? 0, requiredCount: app.match?.requiredCount ?? 0 }}
-                            tags={app.tags ?? []}
-                          />
-                        </button>
-                      );
-                    })}
-                </KanbanColumn>
-              );
-            })}
+          <div className="space-y-4">
+            {shortlistedIds.length > 0 && (
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  className="focus-ring inline-flex min-h-[36px] items-center gap-2 rounded-full border border-metric-blue/40 bg-metric-blue/10 px-4 text-sm font-medium text-ink transition-colors hover:bg-metric-blue/20"
+                  onClick={() => setBulkInviteOpen(true)}
+                >
+                  <Video className="h-4 w-4 text-metric-blue" aria-hidden />
+                  Send interview invitations ({shortlistedIds.length})
+                </button>
+              </div>
+            )}
+            <div className="flex snap-x snap-proximity items-stretch gap-4 overflow-x-auto scroll-thin pb-2 md:grid md:grid-cols-2 xl:grid-cols-4 md:overflow-visible md:pb-0">
+              {PIPELINE_STAGES.map((stage) => {
+                const rows = pipeline[stage];
+                return (
+                  <KanbanColumn key={stage} label={stage} stage={stage} count={rows.length}>
+                    {rows.map((app) => {
+                        const position = app.job.position?.positionTitle || app.job.title;
+                        const name = fullName(app.applicant);
+                        return (
+                          <button
+                            key={app.id}
+                            type="button"
+                            className={KANBAN_CARD + " focus-ring w-full cursor-pointer p-4 text-left"}
+                            onClick={() => navigate("evaluator-review", { id: String(app.id) })}
+                            aria-label={`Review application from ${name}`}
+                          >
+                            <KanbanCardBody
+                              name={name}
+                              position={humanize(position)}
+                              appliedLabel={`Applied ${appliedAgo(app.dateApplied)}`}
+                              match={{ metCount: app.match?.metCount ?? 0, requiredCount: app.match?.requiredCount ?? 0 }}
+                              tags={app.tags ?? []}
+                            />
+                          </button>
+                        );
+                      })}
+                  </KanbanColumn>
+                );
+              })}
+            </div>
           </div>
         </TabsContent>
 
@@ -338,6 +363,21 @@ export default function JobWorkspace() {
 
       {/* Edit dialog */}
       <JobFormDialog open={editOpen} onOpenChange={setEditOpen} job={job} onSaved={() => void load(true)} />
+
+      {/* Task 11 — per-posting interview invitation composer (shared
+          NoticeFormDialog in bulk mode): fans out to the SHORTLISTED cohort
+          of THIS posting only. A single-id cohort rides the single-notice
+          endpoint (the dialog's own isBulk switch). */}
+      {bulkInviteOpen && (
+        <NoticeFormDialog
+          applicationId={shortlistedIds[0] ?? 0}
+          kind="interview"
+          bulkIds={shortlistedIds}
+          bulkContextLabel={job.title}
+          onClose={() => setBulkInviteOpen(false)}
+          onSent={() => void load(true)}
+        />
+      )}
 
       {/* Count-aware delete confirm (spec §6.2 / §7.10) */}
       <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>

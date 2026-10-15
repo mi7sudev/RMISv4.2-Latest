@@ -34,13 +34,20 @@
 // stores the choice in the DropdownOption table (canonical dedup) so the
 // vocabulary grows for every staff member with zero code changes. Base
 // registries (lib/constants) still lead; added choices merge underneath.
+// Task 11 (user direction) — the cross-job "Send interview invitations" bulk
+// send moved OFF the Review Queue onto the per-posting surfaces. The Jobs
+// table gains a Video icon action per row: the staff queue fetch feeds each
+// posting's shortlisted cohort (public /api/jobs must never leak pipeline
+// data, so the cohort comes from /api/evaluator/queue), the button disables
+// at zero, and the shared NoticeFormDialog fans out to THAT posting's
+// shortlist only.
 // ============================================================================
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "@/lib/toast";
 import {
   AlertTriangle, Banknote, Briefcase, CalendarClock, Clock, Eye, FileText,
-  Pencil, Plus, Search, type LucideIcon,
+  Pencil, Plus, Search, Video, type LucideIcon,
 } from "lucide-react";
 // BEUI Phase 8 — official Input (beui.dev/r/input, vendored at
 // src/components/motion/input) + the sanctioned RMIS glue Textarea
@@ -66,6 +73,8 @@ import {
 import { apiFetch, deadlineState, formatCurrency, formatDate } from "@/lib/client";
 import type { JobWire } from "@/lib/router";
 import { navigate } from "@/lib/router";
+import { stageForStatus } from "@/lib/status";
+import { NoticeFormDialog } from "@/components/views/review-workspace";
 import { useFocusRefresh } from "@/lib/use-focus-refresh";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { BrandLogo } from "@/components/brand-logo";
@@ -767,6 +776,11 @@ export function JobFormDialog({
 
 const PAGE_SIZE = 10;
 
+/** Task 11 — lean queue row: only what the per-posting shortlist cohorts
+ *  need (the shared NoticeFormDialog posts application ids to the bulk
+ *  endpoint, which re-verifies the shortlist stage server-side). */
+type QueueLite = { id: number; status: string; jobId: number };
+
 export default function Recruitment() {
   const [jobs, setJobs] = useState<JobWire[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -777,6 +791,9 @@ export default function Recruitment() {
   const [page, setPage] = useState(1);
   const [formOpen, setFormOpen] = useState(false);
   const [editJob, setEditJob] = useState<JobWire | null>(null);
+  // Task 11 — per-posting shortlist cohorts + the open invitation composer.
+  const [queue, setQueue] = useState<QueueLite[] | null>(null);
+  const [bulkInvite, setBulkInvite] = useState<{ jobTitle: string; ids: number[] } | null>(null);
 
   const openCreate = () => {
     setEditJob(null);
@@ -790,8 +807,15 @@ export default function Recruitment() {
   const load = useCallback(async (silent = false) => {
     if (!silent) setError(null);
     try {
-      const data = await apiFetch<JobWire[]>("/api/jobs?limit=200");
+      const [data, queueRes] = await Promise.all([
+        apiFetch<JobWire[]>("/api/jobs?limit=200"),
+        // Task 11 — shortlist cohorts from the STAFF queue endpoint (the
+        // public /api/jobs must never carry pipeline data). Failure here is
+        // non-fatal: the table still loads, invite actions just disable.
+        apiFetch<{ data: QueueLite[] }>("/api/evaluator/queue?pageSize=100").catch(() => null),
+      ]);
       setJobs(data);
+      if (queueRes) setQueue(queueRes.data);
       // BEUI Phase 7 — snapshot server truth per row so a failed inline
       // vacancy edit can revert precisely (see onVacancyEdit below).
       for (const j of data) vacancyServer.current.set(String(j.id), j.numberOfVacancy ?? null);
@@ -886,6 +910,20 @@ export default function Recruitment() {
     return () => clearInterval(id);
   }, [load]);
   useFocusRefresh(load);
+
+  // Task 11 — application ids of the SHORTLISTED cohort per posting, feeding
+  // the per-row invitation send (scoped to that one job — the cross-job
+  // Review Queue bulk send was retired by user direction).
+  const shortlistedByJob = useMemo(() => {
+    const map = new Map<number, number[]>();
+    for (const r of queue ?? []) {
+      if (stageForStatus(r.status) !== "Shortlisted") continue;
+      const list = map.get(r.jobId) ?? [];
+      list.push(r.id);
+      map.set(r.jobId, list);
+    }
+    return map;
+  }, [queue]);
 
   // Debounced search (350 ms).
   useEffect(() => {
@@ -1089,30 +1127,58 @@ export default function Recruitment() {
     {
       key: "actions",
       header: "",
-      width: "110px",
+      // 150px — three quiet icon actions (View · Invite · Edit, 36px each +
+      // gaps) fit without squeezing the flexible Position column.
+      width: "150px",
       align: "right",
-      cell: (j) => (
-        <div className="flex justify-end gap-1.5">
-          <button
-            type="button"
-            className={iconBtn}
-            aria-label={`View ${j.title}`}
-            title="View"
-            onClick={() => navigate("job", { id: String(j.id) })}
-          >
-            <Eye className="h-4 w-4" aria-hidden />
-          </button>
-          <button
-            type="button"
-            className={iconBtn}
-            aria-label={`Edit ${j.title}`}
-            title="Edit"
-            onClick={() => openEdit(j)}
-          >
-            <Pencil className="h-4 w-4" aria-hidden />
-          </button>
-        </div>
-      ),
+      cell: (j) => {
+        // Task 11 — per-posting interview invitations (moved off the Review
+        // Queue): fans out to THIS posting's shortlisted applicants only.
+        // Mobile keeps the two-action set — its 358px column budget cannot
+        // fit a third button; the same send lives on the job workspace's
+        // Pipeline tab (reachable by tapping the posting).
+        const inviteIds = shortlistedByJob.get(j.id) ?? [];
+        return (
+          <div className="flex justify-end gap-1.5">
+            <button
+              type="button"
+              className={iconBtn}
+              aria-label={`View ${j.title}`}
+              title="View"
+              onClick={() => navigate("job", { id: String(j.id) })}
+            >
+              <Eye className="h-4 w-4" aria-hidden />
+            </button>
+            <button
+              type="button"
+              className={cn(iconBtn, "disabled:pointer-events-none disabled:opacity-40")}
+              aria-label={
+                inviteIds.length > 0
+                  ? `Send interview invitations for ${j.title} (${inviteIds.length} shortlisted)`
+                  : `No shortlisted applicants to invite for ${j.title}`
+              }
+              title={
+                inviteIds.length > 0
+                  ? `Send interview invitations (${inviteIds.length} shortlisted)`
+                  : "No shortlisted applicants yet"
+              }
+              disabled={inviteIds.length === 0}
+              onClick={() => setBulkInvite({ jobTitle: j.title, ids: inviteIds })}
+            >
+              <Video className="h-4 w-4" aria-hidden />
+            </button>
+            <button
+              type="button"
+              className={iconBtn}
+              aria-label={`Edit ${j.title}`}
+              title="Edit"
+              onClick={() => openEdit(j)}
+            >
+              <Pencil className="h-4 w-4" aria-hidden />
+            </button>
+          </div>
+        );
+      },
     },
   ];
 
@@ -1264,6 +1330,21 @@ export default function Recruitment() {
       )}
 
       <JobFormDialog open={formOpen} onOpenChange={setFormOpen} job={editJob} onSaved={() => void load(true)} />
+
+      {/* Task 11 — per-posting interview invitation composer (shared
+          NoticeFormDialog in bulk mode): fans out to the SHORTLISTED cohort
+          of THIS posting only. A single-id cohort rides the single-notice
+          endpoint (the dialog's own isBulk switch). */}
+      {bulkInvite && (
+        <NoticeFormDialog
+          applicationId={bulkInvite.ids[0] ?? 0}
+          kind="interview"
+          bulkIds={bulkInvite.ids}
+          bulkContextLabel={bulkInvite.jobTitle}
+          onClose={() => setBulkInvite(null)}
+          onSent={() => void load(true)}
+        />
+      )}
     </div>
   );
 }

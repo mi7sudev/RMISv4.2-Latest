@@ -13,12 +13,17 @@
 // quiet round row actions. 4-column kanban keeps the shared reference-board
 // primitives (dot+label+count columns, pastel avatars, match badge, credential
 // tags). Handlers byte-identical.
+// Task 11 (user direction): the cross-job "Send interview invitations" bulk
+// send was REMOVED from this queue — it emailed every shortlisted applicant
+// across ALL postings at once. The send now lives per job listing on the
+// Jobs table (recruitment) and the Job workspace Pipeline tab, where the
+// cohort is naturally scoped to that one posting.
 // ============================================================================
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "@/lib/toast";
 import {
-  ArrowUpRight, Inbox, LayoutGrid, List, MailX, UserRound, Video,
+  ArrowUpRight, Inbox, LayoutGrid, List, MailX, UserRound,
 } from "lucide-react";
 import {
   Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
@@ -42,7 +47,7 @@ import { useSession } from "@/components/session-provider";
 import { useFocusRefresh } from "@/lib/use-focus-refresh";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
-import { ReviewWorkspace, NoticeFormDialog } from "@/components/views/review-workspace";
+import { ReviewWorkspace } from "@/components/views/review-workspace";
 // BEUI Phase 5 — official virtualized Table (beui.dev/r/table, vendored
 // verbatim at src/components/motion/table). Alignment only via sanctioned props.
 import { Table, type TableColumn } from "@/components/motion/table";
@@ -102,8 +107,6 @@ export default function ReviewQueue() {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [regretOpen, setRegretOpen] = useState(false);
   const [regretBusy, setRegretBusy] = useState(false);
-  // MOM 2026-10-13 — bulk-send interview/exam invitations to the shortlisted.
-  const [bulkNotice, setBulkNotice] = useState<"interview" | "skills_exam" | null>(null);
 
   const load = useCallback(async (silent = false) => {
     if (!silent) setError(null);
@@ -304,11 +307,6 @@ export default function ReviewQueue() {
     () => applications.filter((r) => stageForStatus(r.status) === "Rejected").map((r) => r.id),
     [applications]
   );
-  // MOM 2026-10-13 — shortlisted cohort for the bulk invitation send.
-  const shortlistedIds = useMemo(
-    () => applications.filter((r) => stageForStatus(r.status) === "Shortlisted").map((r) => r.id),
-    [applications]
-  );
 
   const kanbanColumns = useMemo(() => {
     const map: Record<StageKey, QueueRow[]> = { "Applied": [], "Under Review": [], "Shortlisted": [], "Rejected": [] };
@@ -396,18 +394,6 @@ export default function ReviewQueue() {
             <button type="button" className={ghostBadBtn} onClick={() => setRegretOpen(true)}>
               <MailX className="h-4 w-4" aria-hidden />
               Send regret letters ({rejectedIds.length})
-            </button>
-          )}
-          {/* MOM 2026-10-13 — bulk-send interview/exam notices to the
-              shortlisted cohort (per job listing). */}
-          {shortlistedIds.length > 0 && (
-            <button
-              type="button"
-              className="focus-ring inline-flex min-h-[36px] items-center gap-2 rounded-full border border-metric-blue/40 bg-metric-blue/10 px-4 text-sm font-medium text-ink transition-colors hover:bg-metric-blue/20"
-              onClick={() => setBulkNotice("interview")}
-            >
-              <Video className="h-4 w-4 text-metric-blue" aria-hidden />
-              Send interview invitations ({shortlistedIds.length})
             </button>
           )}
         </div>
@@ -577,17 +563,6 @@ export default function ReviewQueue() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* MOM 2026-10-13 — bulk interview/exam invitation composer (shared
-          NoticeFormDialog in bulk mode; posts to the bulk endpoint). */}
-      {bulkNotice && (
-        <NoticeFormDialog
-          applicationId={shortlistedIds[0] ?? 0}
-          kind={bulkNotice}
-          bulkIds={shortlistedIds}
-          onClose={() => setBulkNotice(null)}
-          onSent={() => void load(true)}
-        />
-      )}
     </div>
   );
 }
