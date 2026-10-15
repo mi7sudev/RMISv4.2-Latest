@@ -1484,26 +1484,29 @@ export function ReviewWorkspace({
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_300px] xl:grid-cols-[minmax(0,1fr)_380px]">
       {/* ── LEFT: frozen dossier ── */}
       <div className="dlg-card space-y-4 p-5 sm:p-6">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-4">
+        <div className="space-y-1">
+          {/* Row 1 = identity: avatar · name + live status pill · profile link
+              pushed to the far edge (ml-auto keeps it top-right when it fits,
+              right-aligned on its own line when a narrow viewport wraps it).
+              Row 2 = meta subtitle, indented to align with the name. The old
+              grouping let the pill strand alone on a wrapped row (user QA). */}
+          <div className="flex flex-wrap items-center gap-3">
             <MonogramAvatar name={applicantName} size={48} warm />
-            <div className="min-w-0">
+            <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5">
               <h2 className="text-xl font-medium leading-tight tracking-[0.01em] text-ink sm:text-2xl">{applicantName}</h2>
-              <p className="num mt-1 text-sm text-body-gray">
-                {[positionTitle, place].filter(Boolean).join(" · ")} · Applied {formatDate(payload.dateApplied)}
-              </p>
+              <StatusPill status={payload.status} />
             </div>
-          </div>
-          <div className="flex items-center gap-2.5">
-            <StatusPill status={payload.status} />
             <button
               type="button"
-              className="focus-ring inline-flex min-h-[44px] items-center text-sm font-medium text-metric-blue underline underline-offset-2 transition-colors hover:text-ink"
+              className="focus-ring ml-auto inline-flex min-h-[44px] items-center text-sm font-medium text-metric-blue underline underline-offset-2 transition-colors hover:text-ink"
               onClick={() => navigate("candidate", { id: String(payload.applicant.id) })}
             >
               View full profile
             </button>
           </div>
+          <p className="num pl-[60px] text-sm leading-snug text-body-gray">
+            {[positionTitle, place].filter(Boolean).join(" · ")} · Applied {formatDate(payload.dateApplied)}
+          </p>
         </div>
 
         {/* MOM 2026-10-13 — previously-rejected indicator for this posting. */}
