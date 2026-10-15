@@ -802,3 +802,20 @@ Work Log:
 Stage Summary:
 - Commit (Task 11); working tree clean.
 - Interview invitations are now per-posting everywhere: Jobs table row action + Pipeline tab pill, each fanning out ONLY to that job's shortlisted applicants; the risky cross-job bulk send is gone from the Review Queue. Idempotency, shortlist hard-skip, and the single-id → single-notice fallback all ride the untouched shared dialog/endpoints.
+
+---
+Task ID: 11-f
+Agent: Z.ai Code (main agent)
+Task: User correction on Task 11 — the "Send interview invitations" button should be INSIDE the pipeline kanban of a specific job, not on a toolbar above the board.
+
+Work Log:
+- KanbanColumn (ui/kanban.tsx) gained an optional `action` prop: a full-width slot rendered between the column header and the card stack, for column-scoped controls. Boards that pass nothing (review queue kanban, candidate registry kanban) render byte-identically — verified 4 review-queue columns show zero invite buttons.
+- job-workspace.tsx Pipeline tab: removed the space-y-4 toolbar wrapper and its pill above the board; the "Send interview invitations (N)" button now renders as the Shortlisted column's action — inside the kanban, under the "Shortlisted N" header, above the shortlisted cards. White pill with metric-blue border/video icon on the cloud column, truncate-safe text, aria-label names the cohort ("to all N shortlisted applicants of this job"), title explains the email fan-out. Hidden when the column is empty (0 shortlisted), same as the old queue behavior.
+- Cohort wiring unchanged from Task 11: dialog fans out to THIS job's shortlisted ids only (verified: "…to 2 shortlisted applicants — Supervising Science Research Specialist").
+- Browser verification: desktop 1440×900 — one visible invite button on the page, inside the Shortlisted column (measured: under header, above cards, 248px in a 268px interior); review queue kanban and its 4 columns untouched; dialog opens scoped. Mobile 390×844 — 300px pill inside the 320px snap lane, swiped-to Shortlisted screenshot, no horizontal overflow.
+- Screenshots: .verify/11f-invite-inside-kanban.png, 11f-review-kanban-untouched.png, 11f-mobile-invite-inside-kanban.png.
+- bun run lint clean; dev.log clean.
+
+Stage Summary:
+- Commit (Task 11-f); working tree clean.
+- The invitation send now lives where it reads: inside the Shortlisted column of the job's pipeline kanban — visually AND structurally scoped to that posting. The KanbanColumn action slot is reusable for future column-scoped controls.
