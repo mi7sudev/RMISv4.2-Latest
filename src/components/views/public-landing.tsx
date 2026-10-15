@@ -3,10 +3,11 @@
 // ============================================================================
 // RMIS — Public landing (spec §7.1): a two-pane job explorer in the
 // reference-board style — TOP: a Bevel "Hero Sky" rounded-32 gradient field
-// in a split composition (Google-Workspace rhythm): display headline + copy
-// + .dlg-cta RMIS Electric Blue capsule CTA on the left, the official DOST-MIRDC brand mark
-// with the agency authority line as the institutional proof block on the
-// right; LEFT: a register of Cloud Card
+// carrying the display headline + the agency authority line (the hero CTA
+// and the header board link were retired per user direction — browsing
+// happens right here); LEFT: a single-line [search bar] + [Sort] filter
+// (the board's mobile-Job-Openings pattern: title / item no. / division
+// needle, Newest · Deadline · Salary trio) over a register of Cloud Card
 // job cards (title · division name · place · salary · clamped snippet · posted
 // age · chevron quick-view + bookmark); RIGHT: the full posting pane
 // (display title, "View all jobs" register link — MOM 2026-10-13 removed the
@@ -42,6 +43,7 @@ import {
   Clock,
   Inbox,
   MapPin,
+  Search,
 } from "lucide-react";
 import { toast } from "@/lib/toast";
 import { SiteHeader } from "@/components/shell/site-header";
@@ -50,6 +52,14 @@ import { useApplyFlow } from "@/components/apply/apply-dialogs";
 import { ctaBtn, ghostBtn } from "@/components/ui/buttons";
 import { EmptyState, QuickFact } from "@/components/ui/shell";
 import { Alert, AlertAction, AlertContent, AlertDescription, AlertIcon } from "@/components/motion/alert";
+import { Input } from "@/components/motion/input";
+import {
+  MorphSelect,
+  MorphSelectContent,
+  MorphSelectItem,
+  MorphSelectTrigger,
+  MorphSelectValue,
+} from "@/components/motion/select-morph";
 import { apiFetch, deadlineState, formatCurrency, formatDate, humanize, timeAgo } from "@/lib/client";
 import { divisionFullName } from "@/lib/constants";
 import { useSavedJobs } from "@/lib/use-saved-jobs";
@@ -61,6 +71,9 @@ import { cn } from "@/lib/utils";
 // ── Bevel accents ───────────────────────────────────────────────────────────
 
 const TITLE_SELECTED = "text-metric-blue";
+
+// Sort keys — the same trio as the Vacant Positions board.
+type SortKey = "newest" | "deadline" | "salary";
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -419,6 +432,11 @@ export default function PublicLanding() {
   }, [error]);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [expandedId, setExpandedId] = useState<number | null>(null);
+  // Single-line browse filter (user direction: the hero CTA and the header
+  // board link are gone — the frontpage register is filtered by a
+  // [search bar] + [Sort] row, the board's mobile Job Openings pattern).
+  const [query, setQuery] = useState("");
+  const [sort, setSort] = useState<SortKey>("newest");
   const [isDesktop, setIsDesktop] = useState(false);
   const lastJson = useRef("");
   const paneRef = useRef<HTMLDivElement>(null);
@@ -470,18 +488,54 @@ export default function PublicLanding() {
     [jobs]
   );
 
+  // Filter + sort over the open corpus — the needle covers every line the
+  // register cards actually display: title, position title, item number,
+  // division name AND place of assignment (a visitor typing "metrology"
+  // must match the card that reads "Metrology Laboratory"). Sort uses the
+  // same three comparators as the board (Newest · Deadline · Salary desc).
+  const filteredOpenJobs = useMemo(() => {
+    let list = openJobs;
+    const needle = query.trim().toLowerCase();
+    if (needle) {
+      list = list.filter((j) =>
+        `${j.title} ${j.position?.positionTitle ?? ""} ${j.position?.itemNumber ?? ""} ${
+          j.position?.division ? divisionFullName(j.position.division) : ""
+        } ${jobPlace(j)}`
+          .toLowerCase()
+          .includes(needle)
+      );
+    }
+    const deadlineTime = (j: JobWire) =>
+      j.deadlineDate ? new Date(j.deadlineDate).getTime() : Number.POSITIVE_INFINITY;
+    const sorted = [...list];
+    if (sort === "newest") {
+      sorted.sort((a, b) => Date.parse(b.publishedAt) - Date.parse(a.publishedAt));
+    } else if (sort === "deadline") {
+      sorted.sort((a, b) => deadlineTime(a) - deadlineTime(b));
+    } else {
+      sorted.sort((a, b) => (b.position?.salaryAmount ?? -1) - (a.position?.salaryAmount ?? -1));
+    }
+    return sorted;
+  }, [openJobs, query, sort]);
+
   const selectedJob = useMemo(
     () => openJobs.find((j) => j.id === selectedId) ?? null,
     [openJobs, selectedId]
   );
 
   // Desktop opens with the first posting pre-selected (reference-board
-  // behavior); a stale selection after a poll snaps back to the top card.
+  // behavior) and snaps to the top of the FILTERED register whenever the
+  // current selection is filtered out (search/sort) or closed by a poll —
+  // the posting pane never lags the register.
   useEffect(() => {
-    if (isDesktop && selectedId === null && openJobs.length > 0) {
-      setSelectedId(openJobs[0].id);
+    if (
+      isDesktop &&
+      filteredOpenJobs.length > 0 &&
+      !filteredOpenJobs.some((j) => j.id === selectedId)
+    ) {
+      setSelectedId(filteredOpenJobs[0].id);
     }
-  }, [isDesktop, openJobs, selectedId]);
+  }, [isDesktop, filteredOpenJobs, selectedId]);
 
   useEffect(() => {
     if (selectedId !== null && !openJobs.some((j) => j.id === selectedId)) {
@@ -554,15 +608,6 @@ export default function PublicLanding() {
               Metals Industry Research and Development Center
             </p>
           </div>
-          <div className="mt-6">
-            <button
-              onClick={() => navigate("vacant-positions")}
-              className="dlg-cta text-nav inline-flex min-h-[44px] items-center gap-2 px-4 font-medium"
-            >
-              Browse the full board
-              <ArrowRight className="h-4 w-4" aria-hidden="true" />
-            </button>
-          </div>
         </section>
 
         <Alert variant="destructive" open={error !== null} className="mt-6">
@@ -632,20 +677,71 @@ export default function PublicLanding() {
             {showList && (
               <div
                 aria-label="Job opportunities list"
-                className="scroll-thin space-y-3.5"
+                className="scroll-thin"
               >
-                {openJobs.map((job) => (
-                  <JobListCard
-                    key={job.id}
-                    job={job}
-                    selected={selectedId === job.id}
-                    expanded={expandedId === job.id}
-                    saved={saved.includes(job.id)}
-                    onSelect={() => select(job.id)}
-                    onToggle={() => setExpandedId(expandedId === job.id ? null : job.id)}
-                    onSave={() => saveAndToast(job)}
+                {/* Single-line browse filter — [search bar] + [Sort] on one
+                    row above the register (user direction: the retired hero
+                    CTA / header board link are replaced by this). Sort
+                    options match the desktop board's trio. */}
+                <div className="flex items-center gap-2">
+                  <Input
+                    id="landing-search"
+                    aria-label="Search positions"
+                    leftIcon={<Search />}
+                    value={query}
+                    onChange={setQuery}
+                    placeholder="Search positions…"
+                    className="min-w-0 flex-1"
                   />
-                ))}
+                  <MorphSelect
+                    className="w-[124px] shrink-0"
+                    value={sort}
+                    onValueChange={(v) => setSort(v as SortKey)}
+                  >
+                    <MorphSelectTrigger className="min-h-[44px]">
+                      <span className="sr-only">Sort job openings</span>
+                      <MorphSelectValue />
+                    </MorphSelectTrigger>
+                    <MorphSelectContent>
+                      <MorphSelectItem value="newest">Newest</MorphSelectItem>
+                      <MorphSelectItem value="deadline">Deadline</MorphSelectItem>
+                      <MorphSelectItem value="salary">Salary desc</MorphSelectItem>
+                    </MorphSelectContent>
+                  </MorphSelect>
+                </div>
+
+                {filteredOpenJobs.length === 0 ? (
+                  <div className="dlg-card mt-3.5">
+                    <EmptyState
+                      icon={Search}
+                      title="No positions match your search"
+                      description="Try a different term or clear the search to see every opening."
+                      action={
+                        <button
+                          onClick={() => setQuery("")}
+                          className="dlg-ghost min-h-[44px] px-6 text-sm"
+                        >
+                          Clear search
+                        </button>
+                      }
+                    />
+                  </div>
+                ) : (
+                  <div className="mt-3.5 space-y-3.5">
+                    {filteredOpenJobs.map((job) => (
+                      <JobListCard
+                        key={job.id}
+                        job={job}
+                        selected={selectedId === job.id}
+                        expanded={expandedId === job.id}
+                        saved={saved.includes(job.id)}
+                        onSelect={() => select(job.id)}
+                        onToggle={() => setExpandedId(expandedId === job.id ? null : job.id)}
+                        onSave={() => saveAndToast(job)}
+                      />
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 

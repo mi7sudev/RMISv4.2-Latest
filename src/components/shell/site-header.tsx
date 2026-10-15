@@ -59,21 +59,12 @@ export function SiteHeader() {
           </span>
         </button>
 
-        {/* Right cluster — 16px internal control spacing (gap-4) */}
+        {/* Right cluster — 16px internal control spacing (gap-4). The
+            "Vacant Positions" board link was retired (user direction:
+            browsing happens on the frontpage's search + sort explorer now)
+            — Contact is the only secondary link; the Sign in / Dashboard
+            capsule stays the cluster's single strong control. */}
         <div className="flex items-center gap-4">
-          {/* QA 2026-02: the page/tab label must match the website slug —
-              the board lives at #/vacant-positions as "Vacant Positions". */}
-          {/* Secondary links — spec §Floating Capsule Navigation: quiet
-              Body Gray 16px/500 text links, not bordered pills. The Sign in
-              capsule stays the cluster's single strong control. */}
-          {view !== "vacant-positions" && (
-            <button
-              onClick={() => navigate("vacant-positions")}
-              className="text-nav inline-flex min-h-[44px] items-center whitespace-nowrap px-3 font-medium text-body-gray transition-colors hover:text-ink sm:px-4"
-            >
-              Vacant Positions
-            </button>
-          )}
           {view !== "contact" && (
             <button
               onClick={() => navigate("contact")}
