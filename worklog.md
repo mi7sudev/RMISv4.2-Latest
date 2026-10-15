@@ -661,3 +661,24 @@ Work Log:
 
 Stage Summary:
 - The Review Queue modal now reads like the reference candidate page end-to-end — header card with key facts + Send Email + a real pipeline stepper with days counter, stacked dossier cards instead of tabs, and a matching panel with a big %, expandable requirement checks and a grounded AI Summary — while every handler, dialog and decision path is byte-identical; admin inherits it through the shared route.
+
+---
+Task ID: 9-g
+Agent: Z.ai Code (main agent)
+Task: Review Queue modal — add jump navs below "Work Experience" (same pill-tab look as before) for Education, Training, Eligibility, Awards, Documents.
+
+Work Log:
+- User asked: "make that below the 'Work Experience' on the Review Queue modal are navs the same as before for the Education, Training, Eligibility, Awards, Documents" — i.e. restore the pre-redesign BEUI pill navs as jump links over the stacked-card dossier (Task 12 redesign had removed the capsule tabs).
+- Located the old pill tabs in git history (ea70d8e~1): `Tabs variant="pill"` from src/components/motion/tabs.tsx with icon + label triggers; confirmed the current modal scroll container is the DialogContent (dialogScroll) and the full-page view scrolls the window.
+- src/components/views/review-workspace.tsx:
+  - `SectionCard` gains optional `id` prop + `scroll-mt-20` (clears the dialog edge and the 64px mobile sticky header on anchored landings).
+  - New `SECTION_NAV_ITEMS` + `DossierSectionNav` component placed directly between the Work Experience card and the Education card: official motion Tabs (variant="pill") with GraduationCap/BookOpen/BadgeCheck/Award/FileText triggers — the exact pre-redesign look, no content hidden.
+  - Click = animated pill + `scrollIntoView({ behavior:"smooth", block:"start" })`; a 1200ms pin keeps the clicked pill stable through the glide.
+  - rAF scroll-spy (capture-phase window scroll listener, viewport-relative rects) drives the pill while scrolling, with three rules: (1) classic straddle — card containing the 176px spy line wins; (2) short-dossier fallback — topmost card still on screen when nothing straddles (modal scroll range can run out before later cards climb); (3) bottom edge — last section wins at max scroll when its top never reached the line. Works identically for the DialogContent scroller (modal) and the window scroller (full-page evaluator view).
+  - `useId`-scoped anchor prefix so the review modal and the full-page view can never cross-fire each other's spies; ref mutation moved into an effect to satisfy react-hooks/refs.
+- Browser verification (agent-browser, desktop 1440x900 + mobile 390x844): strip renders below Work Experience; 5 pills; Education active by default; clicking Documents/Eligibility/Awards scrolls and selects; spy honors Education mid-scroll and Documents at the bottom on both modal and full-page surfaces; mobile pills fit with the BEUI edge-chevron overflow; screenshots in .verify/9f-nav-*.png.
+- Fixed en route: first MultiEdit partially applied (bad adjacency anchor) — re-applied remaining edits; react-hooks/refs lint error (ref write during render) fixed via effect sync.
+
+Stage Summary:
+- Commit b2dc2bb on top of d2f722e; lint clean; dev server healthy.
+- The Review Queue modal (and the full-page evaluator review view) now has "the same as before" pill navs below Work Experience that jump to Education / Training / Eligibility / Awards / Documents while the stacked reference look is preserved; the animated pill tracks scroll position.
