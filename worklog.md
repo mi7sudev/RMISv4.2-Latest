@@ -698,3 +698,20 @@ Work Log:
 Stage Summary:
 - Commit c53f4bc; lint clean; dev log clean; working tree clean.
 - The dossier section navs below "Work Experience" now behave exactly like the pre-redesign capsule tabs (one section visible at a time, default Education) while keeping the reference redesign's stacked About/Work Experience cards and decision rail.
+
+---
+Task ID: 10
+Agent: Z.ai Code (main agent)
+Task: Create-job dialog (admin + evaluator) — carry the same actual details the front-page job opportunities show, and enhance the modal: wider, enterprise look, easy to use.
+
+Work Log:
+- Audited the shared form vs the front page: both ADMIN (#/recruitment "Create Job") and EVALUATOR (same dialog + #/job Edit) render ONE JobFormDialog (recruitment.tsx) — but the public posting pane/quick facts render two facts the form never captured: placeOfAssignment (the location line via jobPlace) and salaryStep (the "SG 19/2" quick fact).
+- Backend: extended jobCreateSchema (src/lib/validation.ts) with salaryStep (optStr 20) + placeOfAssignment (optStr 200); jobs POST route — positionVitals() now writes salaryStep + placeOfAssignment through to Position on update/create, hasVitals() counts them; jobs [id] PATCH route — provided-only write-through for both + added to the auto-create-Position fallback data.
+- Frontend (JobFormDialog): new salaryStep/placeOfAssignment state, edit prefill from job.position, payload fields; Place of assignment is a Combobox fed by GET /api/reference placesOfAssignment (free typing always wins, no Add row needed); Salary Step Input sits beside the Salary Grade Combobox.
+- Enterprise modal redesign: DialogContent → flex column max-w-4xl (896px, +33% over the old 2xl) max-h-[92dvh] p-0 overflow-hidden; pinned header (NEW POSTING/EDIT POSTING eyebrow in metric-blue, title, guidance incl. "* required" note, border-b) over a scroll-thin scrollable body over a pinned footer (contextual hint "The posting goes live…" / "Changes save to the posting and its linked position." + Cancel + StatefulButton); Position Details | Compensation & Vacancy panels side by side at lg; Posting Description + Publishing full width; every description field and the place/step/salary/compensation fields carry a muted hint naming exactly where it appears on the public board (card snippet, Responsibilities/Qualifications/Compensation sections, SG pair, location line). dialogScroll import dropped (scroll moved into the body).
+- Browser verification (agent-browser, desktop 1440×900): admin created a QA posting ("Test Posting Task 10 QA", PMD, Permanent, item MIRDC-TEST-10-2026, place "Test Place, Taguig City", SG 19 step 2, ₱51367, deadline Oct 30) → POST 201; API shows Position carrying place/step/salary/item; public landing card + full pane render "Test Place, Taguig City", "₱51,367 per month · SG 19/2", Responsibilities/Compensation sections from the form; evaluator edit dialog prefills all vitals (896px wide) and PATCHing step→3 + place update wrote through (PATCH 200); dialog body scroll keeps header/footer pinned. Mobile 390×844: single-column stack, pinned header/footer, all panels reachable. QA posting deleted afterwards via job workspace (cascade confirm).
+- Screenshots: .verify/10-create-dialog-desktop-top.png, 10-edit-dialog-evaluator.png, 10-edit-dialog-scrolled.png, 10-frontpage-quickview.png, 10-frontpage-pane.png, 10-create-dialog-mobile.png, 10-create-dialog-mobile-scrolled.png.
+
+Stage Summary:
+- Commit (Task 10); lint clean; dev log clean for this session (parse errors in dev.log predate this task — mid-edit state of a prior task); working tree clean.
+- The create/edit job dialog now captures the posting's COMPLETE front-page identity — title, type, division, item no., place of assignment, SG grade/step, monthly salary, vacancies, brief/responsibilities/qualifications/compensation, publish/deadline/processing — written through to Position, identical for ADMIN and EVALUATOR; the modal is a wider enterprise frame (pinned header/footer, two-column panels, self-documenting hints).
