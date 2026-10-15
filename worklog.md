@@ -448,3 +448,18 @@ Work Log:
 
 Stage Summary:
 - Header logo (and favicon) now uses the uploaded MIRDC seal; all render paths verified in browser on desktop + mobile
+
+---
+Task ID: 3
+Agent: Z.ai Code (main)
+Task: Use uploaded LoginPageBg.jfif as the login page left-panel background
+
+Work Log:
+- Inspected upload: 2560x1570 progressive JPEG — photo of the MIRDC building signage (seal + wordmark on gray-blue facade with diagonal light streaks)
+- Installed as public/mirdc-building.jpg
+- Rewrote AuthBrandPanel (shared by sign-in / sign-up): photo backdrop (object-cover, 25% framing bias so the facade signage stays in crop), ink-blue scrim gradient (0.93→0.30 left-to-right) for text contrast, all panel text remapped ink→white opacities, .eyebrow rows restated with white utilities (token pins --stone), lockup seal on a porcelain chip (black quadrants need separation on photography), watermark inverted to porcelain at 0.08
+- Agent Browser verified: sign-in (1440x900 + narrow), sign-up, reset-password (standalone layout, unaffected), mobile iPhone 14 (light card style preserved, panel is lg+ only); footer sticky behavior intact; lint clean
+- Committed the change
+
+Stage Summary:
+- Login/signup left panel now carries the MIRDC building photograph with institutional white-on-scrim typography; mobile auth unchanged
