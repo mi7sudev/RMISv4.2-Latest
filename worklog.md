@@ -463,3 +463,20 @@ Work Log:
 
 Stage Summary:
 - Login/signup left panel now carries the MIRDC building photograph with institutional white-on-scrim typography; mobile auth unchanged
+
+---
+Task ID: 3
+Agent: Z.ai Code (main agent)
+Task: Fix the MIRDC logo not fitting properly on the header.
+
+Work Log:
+- Diagnosed: `public/MIRDC-mark.png` was a zero-padding crop of the uploaded source's right variant (artwork touching all 4 canvas edges). At header size (32px) the quatrefoil read as cramped/clipped, and the seal's white center square melted into the white glass capsule so the gear crest appeared to float on the pinwheel.
+- Verified pixel-exactness first: diffed current asset vs a fresh tight crop of `upload/mirdc-logo.png` (0 differing pixels), and measured both variants' alpha bboxes by scanning column ink (left variant x45..425, right/gear variant exactly 383×383 at (453,63)).
+- Rebuilt `public/MIRDC-mark.png`: native 383×383 artwork centered on a 448×448 transparent canvas (~7.25% padding per side), no interpolation. Backup of previous asset at /tmp/MIRDC-mark-v2-backup.png.
+- Updated `site-header.tsx` brand lockup: mark 32→36px mounted on the porcelain-chip convention already used by jobs board cards + auth brand panel (rounded-full chip, hairline `border-divider/70`, soft shadow) so the emblem gets a defined footprint echoing the 84px-radius pill.
+- Browser-verified every surface sharing the asset: desktop header, mobile header (iPhone 14), sign-in brand panel chip + inverted watermark + mobile lockup, vacant-positions job-card chips, desktop rail brand row, mobile workspace strip. Favicon shares the padded file (bonus).
+- Removed one-off measurement scripts; `bun run lint` clean; dev.log shows no runtime errors (all API 200).
+- Committed as a938e2a "Fix header brand mark fit: padded seal canvas + porcelain chip mount".
+
+Stage Summary:
+- Header logo now renders as a complete, centered seal on a defined circular chip; the padded asset improves every BrandLogo call site and the favicon with zero code changes elsewhere.
