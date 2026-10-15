@@ -598,3 +598,16 @@ Work Log:
 
 Stage Summary:
 - The Requirements match panel now reads category-first with a glanceable scorecard meter and a single quiet line for dimensions the posting doesn't require; both ALL_MET and NOT_MET branches verified live with zero net data change.
+
+---
+Task ID: 9-c
+Agent: Z.ai Code (main agent)
+Task: User QA follow-up (screenshot) — the dossier header's "Applied" status pill: the right-aligned [pill + "View full profile"] group wrapped to a second row and floated alone under the name whenever the name/meta block outgrew the header width.
+
+Work Log:
+- Restructured the dossier header in review-workspace.tsx: status pill now anchors inline beside the applicant name ("James Mendoza [Applied]") inside a flex-wrap identity row; "View full profile" is ml-auto so it pins top-right when space allows and lands right-aligned on its own line when a narrow viewport wraps it; the job/unit/"Applied <date>" meta became a subtitle row indented pl-[60px] to align with the name instead of the avatar.
+- Browser-verified three surfaces: page-style workspace @1280 (one clean band: avatar · name+pill · link right, meta aligned below), queue modal @1280 with a REJECTED application (red pill inline, same geometry), mobile @390 (name+pill one line, link wraps right-aligned, meta wraps 3 lines, no overflow). Pill adapts per status (blue Applied / red Rejected).
+- bun run lint clean; committed 9280ff2.
+
+Stage Summary:
+- The status pill can no longer strand alone on a wrapped header row — it is part of the identity line, the profile link is deterministically right-anchored, and the meta reads as an aligned subtitle across page-style, modal, and mobile surfaces.
