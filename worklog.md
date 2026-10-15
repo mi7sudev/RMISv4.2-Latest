@@ -935,3 +935,18 @@ Stage Summary:
 - Commit d2b24b9 (Task 17); working tree clean; .env now untracked (disk-only) with the production middleware sender + rotated secret.
 - The email sender is CONNECTED: every outgoing email (signup OTP, password reset, notices, HR direct mail) rides the production-verified mirdc_middleware relay with Reply-To recruitment@mirdc.dost.gov.ph. Deploy → register → code email arrives — no config change needed on the VM (§0.2 template already matches .env).
 - Production-ready accounts ship in the deployed DB: admin@mirdc.dost.gov.ph (System Administrator) and evaluator@mirdc.dost.gov.ph (HR Evaluator) with the office-issued passwords from the handover chat (kept out of the repo/docs); go-live day needs only the backup cron + testapplicant deactivation.
+
+---
+Task ID: 18
+Agent: Z.ai Code (main agent)
+Task: Fix the "page is constantly reloading" bug reported by the user.
+
+Work Log:
+- Diagnosed via dev.log: ~82 log lines per 10s cycling GET / -> /api/jobs?limit=200 -> /api/session with interleaved "✓ Compiled" lines (617 GET / since the last restart); reproduced in a fresh agent-browser tab at ~47 full page loads per 12s; browser console showed "[Fast Refresh] rebuilding → done" cycling with "[HMR] connected" — a dev-watcher feedback loop, not an app bug (zero page errors).
+- Isolated the trigger: appending ONE line to /home/z/my-project/dev.log fired 6 recompiles within 3s. Root cause: package.json's dev script was "next dev -p 3000 2>&1 | tee dev.log" — teeing the live log into the project root, which Turbopack watches. Every request appended dev.log → rebuild → Fast Refresh FULL reload → more requests → infinite loop. (Latent since Task 1; surfaced after today's repeated dev-server restarts.)
+- Fix: dev script → "next dev -p 3000 > /tmp/rmis-dev.log 2>&1" (log lives OUTSIDE the watched tree); stale dev.log removed. NOTE FOR FUTURE SESSIONS: the live dev-server log is now /tmp/rmis-dev.log, NOT /home/z/my-project/dev.log.
+- Verified: fresh visit → 0 requests and 0 rebuilds over 10s idle (was 166 lines / 47 reloads in 12s); page renders normally; no console errors; dev.log is not recreated on restart; production "start" script untouched (its tee writes server.log at runtime on the VM, where no watcher runs).
+
+Stage Summary:
+- Commit 4e327b5 (Task 18); working tree clean.
+- The dev-server reload loop is permanently dead at the script level — any future "bun run dev" is safe. Dev logs: /tmp/rmis-dev.log.
