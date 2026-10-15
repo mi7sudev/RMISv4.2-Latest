@@ -513,3 +513,18 @@ Work Log:
 
 Stage Summary:
 - The landing explorer is now the single public browsing surface (search + sort); the #/vacant-positions board route remains for direct links and the landing's no-jobs empty state.
+
+---
+Task ID: 6
+Agent: Z.ai Code (main agent)
+Task: Login page left panel — remove the "DOST-MIRDC seal / Recruitment Management Information System (RMIS)" lockup section and the "The official hiring portal of MIRDC. Your profile doubles as your Personal Data Sheet…" tagline.
+
+Work Log:
+- auth-brand-panel.tsx: deleted the seal-on-porcelain-chip + RMIS_FULL_NAME lockup row and the hiring-portal tagline paragraph; dropped the now-unused RMIS_FULL_NAME import; the gov.ph letterhead (Republic / DOST / MIRDC eyebrow rows) now leads the panel, with the agency motto "Molding the future of metal industries." as the lead display copy and the fact ledger + address unchanged.
+- signin-view.tsx: updated the brand-panel description comment to reflect the retired lockup/tagline (documentation only, no behavior change).
+- Shared panel: AuthBrandPanel is also used by sign-up and reset-password, so all three auth surfaces get the same cleanup for free.
+- Browser-verified (fresh public session): desktop #/signin aside now reads letterhead → motto → EST. 1966/CSC/RA 10173 ledger → address (no seal title, no tagline — innerText probes false for both); iPhone 14 sign-in unaffected (panel is lg+ only); frontpage re-checked in same pass (search + Salary desc sort still reorder the register ₱66,459 → ₱31,699). No browser console/page errors; lint clean; dev.log clean.
+- Committed as a54ce51 "Retire seal lockup and tagline from the auth brand panel".
+
+Stage Summary:
+- Auth brand panel is now letterhead + motto + fact ledger only; both user-named sections are gone across sign-in, sign-up and reset-password.
