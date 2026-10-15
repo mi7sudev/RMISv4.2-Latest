@@ -51,17 +51,26 @@
 // submit lifecycle, and the block's EXACT error timing via useAuthErrors —
 // "flags a field only once it is left, then clears the moment it is fixed"
 // (rules derived on every render; touch on blur; submit reveals all gaps).
+// Candidate-page redesign (user direction, reference screenshot): the dossier
+// reads like a modern ATS candidate page — ONE header card (avatar · name +
+// status pill · icon meta · key-facts grid · Send Email · pipeline stepper
+// with a days counter), then a STACKED card dossier on the left (About, Work
+// Experience, Education, Training, Eligibility, Awards, Documents — the
+// capsule tabs are gone) and the decision rail on the right (matching panel
+// with a big match %, an expandable check list and a grounded AI Summary
+// card backed by GET /api/evaluator/applications/[id]/summary; credentials
+// as chips). Every handler, fetch and dialog is unchanged.
 // ============================================================================
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { toast } from "@/lib/toast";
 import {
-  AlertTriangle, Award, BadgeCheck, BookOpen, BriefcaseBusiness,
-  Check, Eye, FileText, Gavel, GraduationCap, History, IdCard, ListChecks, Mail, MapPin,
-  CheckCircle2, Minus, Mails, Paperclip, Plus, RotateCcw, ScanSearch, Send, Tag, Trash2, UserRound, Video, X, XCircle,
+  AlertTriangle, ArrowUpRight, Award, BadgeCheck, BookOpen, Briefcase, BriefcaseBusiness,
+  CalendarCheck, Check, ChevronDown, Eye, FileText, Gavel, GraduationCap, History, Inbox,
+  ListChecks, Mail, MapPin, Phone,
+  CheckCircle2, Minus, Mails, Paperclip, Plus, RotateCcw, ScanSearch, Send, Sparkles, Tag, Trash2, UserRound, Video, X, XCircle,
   type LucideIcon,
 } from "lucide-react";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/motion/tabs";
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
@@ -80,7 +89,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/forms/textarea";
 import { useAuthErrors } from "@/components/forms/field-errors";
 import {
-  EmptyNote, EmptyState, IconChip, LedgerRow, MonogramAvatar, PageHeader, SkeletonRows,
+  EmptyNote, EmptyState, IconChip, MonogramAvatar, PageHeader, SkeletonRows,
   StatusPill, VerdictPill, dialogScroll, type ChipTone,
 } from "@/components/ui/shell";
 import {
@@ -205,13 +214,6 @@ const DIMENSION_META: Record<
   eligibility: { label: "Eligibility", icon: BadgeCheck },
 };
 
-/** Scorecard meter segment color per check status. */
-const SEGMENT_COLOR: Record<string, string> = {
-  MET: "var(--ok)",
-  NOT_MET: "var(--bad)",
-  REVIEW: "var(--warn)",
-};
-
 function str(v: unknown): string {
   if (v === null || v === undefined) return "";
   if (typeof v === "boolean") return v ? "Yes" : "No";
@@ -226,22 +228,173 @@ function snapshotDisplayDate(v: unknown): string {
   return Number.isNaN(d.getTime()) ? s : formatDate(d);
 }
 
-// ── Dossier section tabs (official BEUI pill tabs) ──────────────────────────
+// ── Candidate-dossier visual kit (reference-matched redesign) ────────────────
 
-const DOSSIER_TABS = [
-  { value: "profile", label: "Profile", icon: UserRound },
-  { value: "education", label: "Education", icon: GraduationCap },
-  { value: "experience", label: "Experience", icon: BriefcaseBusiness },
-  { value: "training", label: "Training", icon: BookOpen },
-  { value: "eligibility", label: "Eligibility", icon: BadgeCheck },
-  { value: "awards", label: "Awards", icon: Award },
-  { value: "documents", label: "Documents", icon: FileText },
-] as const;
+/** Plain dossier card (title + optional count pill + body) — the reference
+    design's stacked "About" / "Work Experience" card anatomy. */
+function SectionCard({ title, count, children }: { title: string; count?: number; children: ReactNode }) {
+  return (
+    <section className="dlg-card p-5">
+      <div className="flex items-center gap-2">
+        <h3 className="text-sm font-semibold text-ink">{title}</h3>
+        {typeof count === "number" && (
+          <span className="dlg-pill num bg-fog px-2 py-0.5 text-[10px] font-medium text-stone">{count}</span>
+        )}
+      </div>
+      <div className="mt-3">{children}</div>
+    </section>
+  );
+}
 
-/** Bounded dossier section (modal only): min/max height + internal scroll —
-    long lists scroll inside their section instead of stretching the modal. */
-const boundedSectionCls =
-  "min-h-[280px] max-h-[56dvh] overflow-y-auto scroll-thin lg:min-h-[360px] lg:max-h-[60dvh]";
+/** Whole days since the application landed (clamped ≥ 0). */
+function daysSince(dateIso: string): number {
+  const t = new Date(dateIso).getTime();
+  if (Number.isNaN(t)) return 0;
+  return Math.max(0, Math.floor((Date.now() - t) / 86_400_000));
+}
+
+/** "2 yrs 6 mos" duration from an experience row's date range. */
+function experienceDuration(row: SnapRow): string {
+  const from = new Date(str(row.dateFrom)).getTime();
+  const to = row.isPresentWork === true ? Date.now() : new Date(str(row.dateTo)).getTime();
+  if (Number.isNaN(from) || Number.isNaN(to) || to < from) return "";
+  const months = Math.max(0, Math.floor((to - from) / (30.44 * 86_400_000)));
+  const y = Math.floor(months / 12);
+  const m = months % 12;
+  return [y ? `${y} yr${y === 1 ? "" : "s"}` : "", m ? `${m} mo${m === 1 ? "" : "s"}` : ""]
+    .filter(Boolean)
+    .join(" ");
+}
+
+/** Deterministic employer mark — pastel tile with initials (the reference
+    design's company-logo slot; RMIS snapshots carry no logos). Hues avoid
+    the brand blue; the mix with var(--card)/var(--ink) adapts to dark mode. */
+const MARK_HUES = [16, 42, 88, 152, 322, 352] as const;
+function CompanyMark({ name }: { name: string }) {
+  const hue = MARK_HUES[[...name].reduce((a, c) => a + c.charCodeAt(0), 0) % MARK_HUES.length];
+  const initials =
+    name
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((w) => w[0]?.toUpperCase() ?? "")
+      .join("") || "?";
+  return (
+    <span
+      aria-hidden
+      className="grid h-10 w-10 shrink-0 place-items-center rounded-lg border text-[13px] font-semibold"
+      style={{
+        background: `color-mix(in srgb, hsl(${hue} 75% 50%) 12%, var(--card))`,
+        borderColor: `color-mix(in srgb, hsl(${hue} 75% 50%) 25%, transparent)`,
+        color: `color-mix(in srgb, hsl(${hue} 70% 42%) 70%, var(--ink))`,
+      }}
+    >
+      {initials}
+    </span>
+  );
+}
+
+// ── Pipeline stepper (header card) ──────────────────────────────────────────
+// The reference design's horizontal stage tracker, mapped onto the REAL RMIS
+// pipeline (lib/status.ts): Applied → Under Review → Shortlisted, with the
+// offline "Appointment" step as the gray forward marker (mirrors the
+// applicant journey modal's Face-to-face step). Rejected collapses the path
+// to Applied → (Under Review) → the terminal red node labelled with the
+// stored status — glyphs reuse the canonical stage vocabulary.
+
+type StepperNode = {
+  key: string;
+  label: string;
+  icon: LucideIcon;
+  state: "done" | "current" | "todo";
+  terminal?: boolean;
+};
+
+function StageStepper({ status, dateApplied }: { status: string; dateApplied: string }) {
+  const stage = stageForStatus(status);
+  const days = daysSince(dateApplied);
+  const successPath: StepperNode[] = [
+    { key: "applied", label: "Applied", icon: Inbox, state: "todo" },
+    { key: "review", label: "Under Review", icon: ScanSearch, state: "todo" },
+    { key: "shortlisted", label: "Shortlisted", icon: Check, state: "todo" },
+    { key: "appointment", label: "Appointment", icon: CalendarCheck, state: "todo" },
+  ];
+  let nodes: StepperNode[];
+  if (stage === "Rejected") {
+    const terminalLabel = getStatusMeta(status).label;
+    nodes = [
+      { ...successPath[0], state: "done" },
+      { ...successPath[1], state: "todo" },
+      {
+        key: "terminal",
+        label: terminalLabel === "Rejected" ? "Not Qualified" : terminalLabel,
+        icon: XCircle,
+        state: "current",
+        terminal: true,
+      },
+    ];
+  } else {
+    const idx = successPath.findIndex((n) => n.label === stage);
+    nodes = successPath.map((n, i) => ({ ...n, state: i < idx ? "done" : i === idx ? "current" : "todo" }));
+  }
+  const nodeStyle = (n: StepperNode): CSSProperties =>
+    n.terminal
+      ? { background: "var(--bad)", color: "#ffffff" }
+      : n.state === "done"
+        ? { background: "var(--primary)", color: "#ffffff" }
+        : n.state === "current"
+          ? { background: "var(--card)", border: "2px solid var(--primary)", color: "var(--primary)" }
+          : { background: "var(--card)", border: "1.5px solid var(--divider)", color: "var(--pebble)" };
+  const connectorColor = (left: StepperNode, right: StepperNode) =>
+    right.terminal ? "var(--bad)" : left.state === "done" ? "var(--primary)" : "var(--divider)";
+  return (
+    <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
+      <ol aria-label="Application pipeline" className="flex min-w-[320px] flex-1 items-start overflow-x-auto scroll-thin pb-1">
+        {nodes.map((n, i) => (
+          <li key={n.key} className={cn("flex items-start", i < nodes.length - 1 ? "flex-1" : "shrink-0")}>
+            <div className="flex w-[76px] shrink-0 flex-col items-center gap-1 text-center sm:w-20">
+              <span aria-hidden className="grid h-10 w-10 place-items-center rounded-full" style={nodeStyle(n)}>
+                <n.icon className="h-4 w-4" />
+              </span>
+              <p
+                className={cn(
+                  "text-[11px] leading-4",
+                  n.state === "current"
+                    ? n.terminal
+                      ? "font-medium text-[var(--bad)]"
+                      : "font-medium text-[var(--primary)]"
+                    : "text-stone"
+                )}
+              >
+                <span className="sr-only">Step {i + 1}: </span>
+                {n.label}
+              </p>
+              {n.key === "applied" && (
+                <p className="num text-[10px] leading-tight text-pebble">{formatDate(dateApplied)}</p>
+              )}
+            </div>
+            {i < nodes.length - 1 && (
+              <span
+                aria-hidden
+                className="mt-[19px] h-[2px] min-w-4 flex-1 rounded-full"
+                style={{ background: connectorColor(n, nodes[i + 1]) }}
+              />
+            )}
+          </li>
+        ))}
+      </ol>
+      {/* Days counter — the reference card's right end. RMIS tracks the
+          application date, not per-stage entry dates, so the caption stays
+          honest ("since applied") instead of borrowing "in current stage". */}
+      <div className="shrink-0 rounded-2xl bg-fog px-5 py-3 text-center">
+        <p className="num text-lg font-semibold leading-6 text-ink">
+          {days === 0 ? "Today" : `${days} day${days === 1 ? "" : "s"}`}
+        </p>
+        <p className="mt-0.5 text-[11px] leading-4 text-stone">since applied</p>
+      </div>
+    </div>
+  );
+}
 
 // ── Snapshot tab renderers ──────────────────────────────────────────────────
 
@@ -270,28 +423,38 @@ function EducationCards({ rows }: { rows: SnapRow[] }) {
   );
 }
 
-function ExperienceCards({ rows }: { rows: SnapRow[] }) {
+/** Reference-style Work Experience — employer mark + bold employer, role,
+    dates · computed duration · employment type. */
+function WorkExperienceCard({ rows }: { rows: SnapRow[] }) {
   if (!rows.length) return <EmptyNote>No work experience entries on file.</EmptyNote>;
   return (
-    <div className="space-y-3">
-      {rows.map((r, i) => (
-        <div key={i} className="rounded-lg bg-white p-4">
-          <div className="flex items-start justify-between gap-3">
-            <p className="text-sm text-ink">{str(r.positionTitle) || "-"}</p>
-            {r.isPresentWork === true && <span className={pillClass("info")}>Present</span>}
+    <div className="space-y-4">
+      {rows.map((r, i) => {
+        const employer = str(r.employerName);
+        const role = str(r.positionTitle);
+        const dur = experienceDuration(r);
+        return (
+          <div key={i} className="flex gap-3.5">
+            <CompanyMark name={employer || role || "Entry"} />
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold text-ink">{employer || role || "—"}</p>
+              {employer && role && <p className="mt-0.5 text-[13px] text-body-gray">{role}</p>}
+              <p className="num mt-1 text-xs leading-4 text-stone">
+                {[
+                  (str(r.dateFrom) || str(r.dateTo)) &&
+                    `${snapshotDisplayDate(r.dateFrom) || "—"} – ${
+                      r.isPresentWork ? "Present" : snapshotDisplayDate(r.dateTo) || "—"
+                    }`,
+                  dur,
+                  str(r.statusOfEmployment),
+                ]
+                  .filter(Boolean)
+                  .join(" · ") || "—"}
+              </p>
+            </div>
           </div>
-          <p className="mt-1 text-xs text-stone">{str(r.employerName) || "-"}</p>
-          <p className="num mt-0.5 text-xs text-stone">
-            {[
-              (str(r.dateFrom) || str(r.dateTo)) &&
-                `${snapshotDisplayDate(r.dateFrom) || "-"} – ${r.isPresentWork ? "Present" : snapshotDisplayDate(r.dateTo) || "-"}`,
-              str(r.statusOfEmployment),
-            ]
-              .filter(Boolean)
-              .join(" · ") || "-"}
-          </p>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -357,88 +520,191 @@ function AwardCards({ rows }: { rows: SnapRow[] }) {
 
 // ── Decision rail pieces ────────────────────────────────────────────────────
 
-/** Requirement check status → pill (verdict colors). */
-function checkPill(status: string): { label: string; variant: StatusVariant } {
-  switch (status) {
-    case "MET":
-      return { label: "Met", variant: "ok" };
-    case "NOT_MET":
-      return { label: "Not met", variant: "bad" };
-    case "REVIEW":
-      return { label: "Verify", variant: "neutral" };
-    default:
-      return { label: "Not required", variant: "neutral" };
+// ── "About" card ────────────────────────────────────────────────────────────
+// Composed bio (experience → education → eligibility) plus the contact rows,
+// personal facts and character references the old Profile tab carried — the
+// reference design's About card, grounded in the frozen snapshot.
+
+function AboutCard({ payload }: { payload: ReviewPayload }) {
+  const p = payload.snapshots.profile ?? {};
+  const refs = Array.isArray(p.characterReferences) ? (p.characterReferences as SnapRow[]) : [];
+  const exps = payload.snapshots.experiences;
+  const edus = payload.snapshots.educations;
+  const eligs = payload.snapshots.eligibilities;
+
+  // Experience span → opening sentence.
+  let earliest: number | null = null;
+  let latestEnd: number | null = null;
+  for (const r of exps) {
+    const f = Date.parse(str(r.dateFrom));
+    if (!Number.isNaN(f)) earliest = earliest === null ? f : Math.min(earliest, f);
+    const t = r.isPresentWork === true ? Date.now() : Date.parse(str(r.dateTo));
+    if (!Number.isNaN(t)) latestEnd = latestEnd === null ? t : Math.max(latestEnd, t);
   }
+  const years =
+    earliest !== null && latestEnd !== null ? Math.floor((latestEnd - earliest) / (365.25 * 86_400_000)) : 0;
+  const current = exps.find((r) => r.isPresentWork === true) ?? exps[exps.length - 1];
+  const openLabel =
+    years >= 1
+      ? `${years}+ year${years === 1 ? "" : "s"} of professional experience`
+      : exps.length
+        ? "Early-career professional"
+        : "";
+  const s1 = exps.length
+    ? `${openLabel || "Work history on file"}${
+        current
+          ? `, most recently as ${str(current.positionTitle) || "a role"}${
+              str(current.employerName) ? ` at ${str(current.employerName)}` : ""
+            }`
+          : ""
+      }.`
+    : "";
+  const edu = edus[0];
+  const eduCourse = edu ? str(edu.course) || str(edu.degree) : "";
+  const s2 = edu
+    ? `Holds ${str(edu.educationLevel) || "a degree"}${eduCourse ? ` in ${eduCourse}` : ""}${
+        str(edu.schoolName) ? ` from ${str(edu.schoolName)}` : ""
+      }${str(edu.yearGraduated) ? `, graduated ${str(edu.yearGraduated)}` : ""}.`
+    : "";
+  const eligTitles = eligs.map((e) => str(e.title) || str(e.eligibilityTitle)).filter(Boolean);
+  const s3 = eligTitles.length
+    ? `Civil service eligibility: ${eligTitles.slice(0, 2).join(" and ")}${eligTitles.length > 2 ? ", among others" : ""}.`
+    : "";
+  const bio = [s1, s2, s3].filter(Boolean).join(" ") || "No profile summary on file yet — review the credential sections below.";
+
+  const contact = [
+    { icon: Mail, value: str(p.emailAddress) || str(payload.applicant.emailAddress) },
+    { icon: Phone, value: str(p.mobileNumber) || str(p.contactNumber) },
+    { icon: MapPin, value: str(p.presentAddress) },
+  ].filter((r) => r.value);
+  const facts = [
+    { label: "Gender", value: str(p.gender) },
+    { label: "Civil status", value: str(p.civilStatus) },
+    { label: "Birth date", value: snapshotDisplayDate(p.birthDate) },
+    { label: "Birth place", value: str(p.birthPlace) },
+  ].filter((f) => f.value);
+
+  return (
+    <SectionCard title="About">
+      <p className="text-[13px] leading-relaxed text-body-gray">{bio}</p>
+      {contact.length > 0 && (
+        <div className="mt-3 space-y-1.5">
+          {contact.map(({ icon: Icon, value }, i) => (
+            <p key={i} className="flex items-center gap-2 text-[13px] text-stone">
+              <Icon className="h-3.5 w-3.5 shrink-0 text-pebble" aria-hidden />
+              <span className="min-w-0 truncate" title={value}>
+                {value}
+              </span>
+            </p>
+          ))}
+        </div>
+      )}
+      {facts.length > 0 && (
+        <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-2 border-t border-divider pt-3 sm:grid-cols-4">
+          {facts.map((f) => (
+            <div key={f.label} className="min-w-0">
+              <dt className="text-[10px] uppercase tracking-wide text-pebble">{f.label}</dt>
+              <dd className="num mt-0.5 truncate text-xs font-medium text-ink" title={f.value}>
+                {f.value}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      )}
+      {refs.length > 0 && (
+        <div className="mt-4 border-t border-divider pt-3">
+          <p className="text-xs font-medium text-stone">Character references</p>
+          <ul className="mt-1.5 space-y-1">
+            {refs.map((r, i) => (
+              <li key={i} className="text-[13px] text-ink">
+                {[str(r.name), str(r.address), str(r.telephone) || str(r.contactNumber)].filter(Boolean).join(" · ") || "-"}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </SectionCard>
+  );
 }
 
-function RequirementsMatchPanel({ report }: { report: RequirementsReport }) {
+function MatchingPanel({ report, applicationId }: { report: RequirementsReport; applicationId: number }) {
+  const [openIdx, setOpenIdx] = useState<number | null>(null);
   const meaning = VERDICT_MEANING[report.verdict] ?? "";
   const relevant = report.checks.filter((c) => c.status !== "NOT_REQUIRED");
   const notRequired = report.checks.filter((c) => c.status === "NOT_REQUIRED");
-  const allMet = report.requiredCount > 0 && report.metCount === report.requiredCount;
-  const summaryCls = allMet ? "text-[var(--ok)]" : report.metCount > 0 ? "text-[var(--warn)]" : "text-stone";
+  // Reference layout: one big percentage where the old segmented meter was —
+  // the segmented scorecard folds into "N of M requirements matched".
+  const pct = report.requiredCount > 0 ? Math.round((report.metCount / report.requiredCount) * 100) : null;
   return (
-    <div className="dlg-card p-4">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-3">
-          <IconChip icon={ListChecks} tone="gold" size={36} iconSize={16} />
-          <div className="min-w-0">
-            <h3 className="text-[15px] font-medium leading-6 text-ink">Requirements match</h3>
-            <p className="mt-0.5 text-xs text-stone">{meaning}</p>
-          </div>
+    <section className="dlg-card p-5">
+      <div className="flex items-center gap-3">
+        <IconChip icon={ListChecks} tone="blue" size={36} iconSize={16} />
+        <div className="min-w-0 flex-1">
+          <h3 className="text-sm font-semibold text-ink">Skill &amp; Experience Matching</h3>
+          <p className="mt-0.5 text-xs text-stone">{meaning}</p>
         </div>
         <VerdictPill verdict={report.verdict} className="shrink-0" />
       </div>
-      {/* Scorecard meter — one segment per relevant check, colored by its
-          status, so "2 of 2 standards met" is visible at a glance. */}
-      {report.requiredCount > 0 && (
-        <div className="mt-3 flex items-center gap-3">
-          <div
-            className="flex min-w-0 flex-1 gap-1"
-            role="img"
-            aria-label={`${report.metCount} of ${report.requiredCount} standards met`}
-          >
-            {relevant.map((c, i) => (
-              <span
-                key={i}
-                className="h-1.5 flex-1 rounded-full"
-                style={{ background: SEGMENT_COLOR[c.status] ?? "var(--fog)" }}
-              />
-            ))}
-          </div>
-          <p className={cn("num shrink-0 text-[13px] font-medium", summaryCls)}>
-            {report.metCount} of {report.requiredCount} standards met
+      {pct !== null && (
+        <div className="mt-4">
+          <p className="text-3xl font-semibold leading-8 tracking-tight text-ink" aria-label={`${pct} percent match`}>
+            {pct}%
+          </p>
+          <p className="mt-1 text-xs text-stone">
+            {report.metCount} of {report.requiredCount} requirements matched
           </p>
         </div>
       )}
       {report.checks.length > 0 ? (
-        <div className="mt-3 max-h-96 space-y-2 overflow-y-auto scroll-thin pr-1">
-          {/* Relevant checks — category leads, status sits at the far end,
-              then the CSC standard and what the applicant has on file. */}
+        <div className="mt-3 max-h-96 space-y-0.5 overflow-y-auto scroll-thin">
+          {/* Check list — reference-style plain rows (icon + standard); each
+              row expands to the full standard, the on-file summary and any
+              shortfall so no requirement detail was lost in the restyle. */}
           {relevant.map((c, i) => {
-            const cp = checkPill(c.status);
             const cc = checkChip(c.status);
             const dim = DIMENSION_META[c.dimension];
+            const open = openIdx === i;
             return (
-              <div key={i} className="rounded-lg bg-white p-3">
-                <div className="flex items-center gap-2">
-                  <IconChip icon={cc.icon} tone={cc.tone} size={18} iconSize={10} />
-                  <span className="min-w-0 flex-1 truncate text-[10px] font-semibold uppercase tracking-wide text-stone">
-                    {dim.label}
+              <div key={i}>
+                <button
+                  type="button"
+                  aria-expanded={open}
+                  onClick={() => setOpenIdx(open ? null : i)}
+                  className="focus-ring flex w-full items-start gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-fog"
+                >
+                  <cc.icon
+                    className={cn(
+                      "mt-0.5 h-4 w-4 shrink-0",
+                      cc.tone === "emerald"
+                        ? "text-[var(--ok)]"
+                        : cc.tone === "rose"
+                          ? "text-[var(--bad)]"
+                          : "text-[var(--warn)]"
+                    )}
+                    aria-hidden
+                  />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[13px] font-medium text-ink">{c.standard || dim.label}</span>
+                    <span className="block truncate text-[11px] text-stone">
+                      {dim.label} · {c.applicantSummary || "nothing on file"}
+                    </span>
                   </span>
-                  <StatusPill status={cp.label} variant={cp.variant} className="shrink-0" />
-                </div>
-                <p className="mt-1.5 text-[13px] font-medium leading-5 text-ink line-clamp-2">
-                  {c.standard || "-"}
-                </p>
-                <p className="num mt-1 text-xs leading-5 text-stone line-clamp-2">
-                  {c.applicantSummary || "No applicant data on file."}
-                </p>
-                {c.shortfall && (
-                  <p className="mt-1 flex items-start gap-1 text-xs leading-5 text-[var(--bad)]">
-                    <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" aria-hidden />
-                    <span className="min-w-0">{c.shortfall}</span>
-                  </p>
+                  <ChevronDown
+                    className={cn("mt-1 h-3.5 w-3.5 shrink-0 text-pebble transition-transform", open && "rotate-180")}
+                    aria-hidden
+                  />
+                </button>
+                {open && (
+                  <div className="mb-1 rounded-lg bg-white p-3">
+                    <p className="text-[13px] leading-5 text-ink">{c.standard || "—"}</p>
+                    <p className="num mt-1 text-xs leading-5 text-stone">{c.applicantSummary || "No applicant data on file."}</p>
+                    {c.shortfall && (
+                      <p className="mt-1.5 flex items-start gap-1 text-xs leading-5 text-[var(--bad)]">
+                        <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" aria-hidden />
+                        <span className="min-w-0">{c.shortfall}</span>
+                      </p>
+                    )}
+                  </div>
                 )}
               </div>
             );
@@ -446,7 +712,7 @@ function RequirementsMatchPanel({ report }: { report: RequirementsReport }) {
           {/* Dimensions the posting does not require collapse to one muted
               line each — no more "None required" + "Not required" double-say. */}
           {notRequired.length > 0 && (
-            <div className="rounded-lg bg-white/60 px-3 py-2.5">
+            <div className="mt-2 rounded-lg bg-white/60 px-3 py-2.5">
               <p className="text-[10px] font-semibold uppercase tracking-wide text-pebble">
                 Not required for this posting
               </p>
@@ -470,6 +736,55 @@ function RequirementsMatchPanel({ report }: { report: RequirementsReport }) {
       ) : (
         <p className="mt-3 text-xs text-stone">No published standards to check.</p>
       )}
+      <AiSummaryCard applicationId={applicationId} report={report} />
+    </section>
+  );
+}
+
+/** "AI Summary" box — grounded fit summary fetched from the backend LLM
+    route (which falls back to a deterministic composition; the loading state
+    is a quiet shimmer and a failed request simply hides the box). */
+function AiSummaryCard({ applicationId, report }: { applicationId: number; report: RequirementsReport }) {
+  const [summary, setSummary] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    let alive = true;
+    setLoading(true);
+    setSummary(null);
+    apiFetch<{ summary: string }>(`/api/evaluator/applications/${applicationId}/summary`)
+      .then((r) => {
+        if (alive) {
+          setSummary(r.summary);
+          setLoading(false);
+        }
+      })
+      .catch(() => {
+        if (alive) setLoading(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [applicationId, report.verdict, report.metCount, report.requiredCount]);
+  if (loading) {
+    return (
+      <div className="mt-4 rounded-xl border border-divider bg-fog/50 p-4" aria-hidden>
+        <Skeleton className="h-3.5 w-24" />
+        <Skeleton className="mt-2 h-3 w-full" />
+        <Skeleton className="mt-1.5 h-3 w-4/5" />
+      </div>
+    );
+  }
+  if (!summary) return null;
+  return (
+    <div className="mt-4 rounded-xl p-4" style={{ background: "color-mix(in srgb, var(--primary) 8%, var(--card))" }}>
+      <p className="flex items-center gap-1.5 text-[13px] font-medium text-metric-blue">
+        <Sparkles className="h-3.5 w-3.5" aria-hidden />
+        AI Summary
+      </p>
+      <p className="mt-1.5 text-[13px] leading-relaxed text-body-gray">{summary}</p>
+      <p className="mt-2 text-[10px] text-pebble">
+        Auto-generated from the frozen snapshot — verify against the source documents.
+      </p>
     </div>
   );
 }
@@ -477,42 +792,33 @@ function RequirementsMatchPanel({ report }: { report: RequirementsReport }) {
 function CredentialsRow({ payload }: { payload: ReviewPayload }) {
   const p = payload.snapshots.profile;
   const personalCount = p ? Object.values(p).filter((v) => v !== null && v !== "" && v !== undefined).length : 0;
-  // 2-column icon grid — one row per credential section (user QA: the old
-  // 7 pill chips wrapped across three ragged lines). Zeros render muted so
-  // an empty section never reads as an error. Documents spans the full row.
-  const items: { label: string; count: number; icon: LucideIcon; span?: boolean }[] = [
+  // Reference-style chips — one chip per credential section with its count;
+  // zeros render muted so an empty section never reads as an error.
+  const items: { label: string; count: number; icon: LucideIcon }[] = [
     { label: "Personal", count: personalCount, icon: UserRound },
     { label: "Education", count: payload.snapshots.educations.length, icon: GraduationCap },
     { label: "Work", count: payload.snapshots.experiences.length, icon: BriefcaseBusiness },
     { label: "Training", count: payload.snapshots.trainings.length, icon: BookOpen },
     { label: "Eligibility", count: payload.snapshots.eligibilities.length, icon: BadgeCheck },
     { label: "Awards", count: payload.snapshots.awards.length, icon: Award },
-    { label: "Documents", count: payload.snapshots.documents.length, icon: FileText, span: true },
+    { label: "Documents", count: payload.snapshots.documents.length, icon: FileText },
   ];
   return (
-    <div className="dlg-card p-4">
-      <div className="flex items-center gap-2.5">
-        <IconChip icon={IdCard} tone="slate" size={28} iconSize={13} />
-        <h3 className="text-[15px] font-medium leading-6 text-ink">Credentials on file</h3>
-      </div>
-      <div className="mt-3 grid grid-cols-2 gap-1.5">
-        {items.map(({ label, count, icon: Icon, span }) => (
-          <div
+    <section className="dlg-card p-5">
+      <h3 className="text-sm font-semibold text-ink">Credentials on file</h3>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {items.map(({ label, count, icon: Icon }) => (
+          <span
             key={label}
-            className={cn(
-              "flex min-w-0 items-center gap-2 rounded-lg bg-white px-2.5 py-2",
-              span && "col-span-2"
-            )}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-fog px-3 py-1.5 text-xs text-stone"
           >
-            <Icon className="h-3.5 w-3.5 shrink-0 text-stone" aria-hidden />
-            <span className="min-w-0 flex-1 truncate text-xs text-stone">{label}</span>
-            <span className={cn("num text-sm font-medium", count === 0 ? "text-pebble" : "text-ink")}>
-              {count}
-            </span>
-          </div>
+            <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden />
+            {label}
+            <span className={cn("num font-semibold", count === 0 ? "text-pebble" : "text-ink")}>{count}</span>
+          </span>
         ))}
       </div>
-    </div>
+    </section>
   );
 }
 
@@ -1320,7 +1626,7 @@ export function ReviewWorkspace({
   const [noticeKind, setNoticeKind] = useState<"interview" | "skills_exam" | null>(null);
   const [regretOpen, setRegretOpen] = useState(false);
   const [regretBusy, setRegretBusy] = useState(false);
-  const [tab, setTab] = useState("profile");
+  const [emailOpen, setEmailOpen] = useState(false);
   const [previewDoc, setPreviewDoc] = useState<PreviewDoc | null>(null);
 
   const load = useCallback(
@@ -1444,144 +1750,176 @@ export function ReviewWorkspace({
 
   if (!payload) {
     return (
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_300px] xl:grid-cols-[minmax(0,1fr)_380px]">
+      <div className="space-y-5">
+        {/* Header card skeleton — identity row, key-facts row, stepper band */}
         <div className="dlg-card space-y-5 p-5 sm:p-6">
-          <div className="space-y-2.5">
-            <Skeleton className="h-7 w-1/2" />
-            <Skeleton className="h-4 w-1/3" />
+          <div className="flex items-start gap-4">
+            <Skeleton className="h-14 w-14 rounded-full" />
+            <div className="flex-1 space-y-2">
+              <Skeleton className="h-6 w-1/2" />
+              <Skeleton className="h-4 w-1/3" />
+            </div>
+            <Skeleton className="h-9 w-28 rounded-full" />
           </div>
-          <div className="flex gap-2 border-b border-border pb-3">
-            {Array.from({ length: 5 }).map((_, i) => (
-              <Skeleton key={i} className="h-4 w-20" />
+          <div className="flex flex-wrap gap-8">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="space-y-1.5">
+                <Skeleton className="h-3 w-16" />
+                <Skeleton className="h-4 w-24" />
+              </div>
             ))}
           </div>
-          <SkeletonRows rows={6} />
+          <Skeleton className="h-12 w-full rounded-2xl" />
         </div>
-        <div className="space-y-4">
-          <div className="dlg-card p-4">
-            <Skeleton className="mb-3 h-4 w-32" />
-            <SkeletonRows rows={3} rowClassName="h-6" />
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_340px] xl:grid-cols-[minmax(0,1fr)_400px]">
+          <div className="space-y-5">
+            <div className="dlg-card space-y-3 p-5">
+              <Skeleton className="h-4 w-16" />
+              <SkeletonRows rows={3} />
+            </div>
+            <div className="dlg-card space-y-3 p-5">
+              <Skeleton className="h-4 w-36" />
+              <SkeletonRows rows={2} />
+            </div>
           </div>
-          <div className="dlg-card p-4">
-            <Skeleton className="mb-3 h-4 w-24" />
-            <SkeletonRows rows={4} rowClassName="h-6" />
+          <div className="space-y-5">
+            <div className="dlg-card space-y-3 p-5">
+              <Skeleton className="h-4 w-44" />
+              <Skeleton className="h-8 w-16" />
+              <SkeletonRows rows={3} rowClassName="h-7" />
+            </div>
+            <div className="dlg-card space-y-3 p-5">
+              <Skeleton className="h-4 w-36" />
+              <SkeletonRows rows={3} rowClassName="h-7" />
+            </div>
           </div>
         </div>
       </div>
     );
   }
 
-  const p = payload.snapshots.profile ?? {};
-  const characterRefs = Array.isArray(p.characterReferences) ? (p.characterReferences as SnapRow[]) : [];
   const positionTitle = payload.job.position?.positionTitle || payload.job.title;
   const place = payload.job.position?.placeOfAssignment ?? null;
-  const sectionCls = (extra: string) => (bounded ? `${extra} ${boundedSectionCls}` : extra);
   // MOM 2026-10-13 — the evaluator must see re-application history: this
   // applicant previously applied (and was rejected) for THIS job listing.
   const prior = payload.priorRejections ?? null;
+  const stageLabel = getStatusMeta(payload.status).label;
 
   return (
-    <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_300px] xl:grid-cols-[minmax(0,1fr)_380px]">
-      {/* ── LEFT: frozen dossier ── */}
-      <div className="dlg-card space-y-4 p-5 sm:p-6">
-        <div className="space-y-1">
-          {/* Row 1 = identity: avatar · name + live status pill · profile link
-              pushed to the far edge (ml-auto keeps it top-right when it fits,
-              right-aligned on its own line when a narrow viewport wraps it).
-              Row 2 = meta subtitle, indented to align with the name. The old
-              grouping let the pill strand alone on a wrapped row (user QA). */}
-          <div className="flex flex-wrap items-center gap-3">
-            <MonogramAvatar name={applicantName} size={48} warm />
+    <div className="space-y-5">
+      {/* ── Header card: identity → icon meta → key-facts grid → Send Email →
+          pipeline stepper (reference candidate-page anatomy) ── */}
+      <div className="dlg-card p-5 sm:p-6">
+        <div className="flex flex-wrap items-start gap-4">
+          <MonogramAvatar name={applicantName} size={56} warm />
+          <div className="min-w-0 flex-1 basis-56">
             <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5">
-              <h2 className="text-xl font-medium leading-tight tracking-[0.01em] text-ink sm:text-2xl">{applicantName}</h2>
+              <h2 className="text-xl font-semibold leading-tight tracking-[0.01em] text-ink sm:text-2xl">{applicantName}</h2>
               <StatusPill status={payload.status} />
             </div>
-            <button
-              type="button"
-              className="focus-ring ml-auto inline-flex min-h-[44px] items-center text-sm font-medium text-metric-blue underline underline-offset-2 transition-colors hover:text-ink"
-              onClick={() => navigate("candidate", { id: String(payload.applicant.id) })}
-            >
-              View full profile
-            </button>
-          </div>
-          <p className="num pl-[60px] text-sm leading-snug text-body-gray">
-            {[positionTitle, place].filter(Boolean).join(" · ")} · Applied {formatDate(payload.dateApplied)}
-          </p>
-        </div>
-
-        {/* MOM 2026-10-13 — previously-rejected indicator for this posting. */}
-        {prior && (
-          <div
-            className="flex items-start gap-2.5 rounded-xl border border-[color-mix(in_srgb,var(--warn)_35%,transparent)] bg-[color-mix(in_srgb,var(--warn)_10%,white)] px-4 py-3"
-            role="note"
-          >
-            <History className="mt-0.5 h-4 w-4 shrink-0 text-[var(--warn)]" aria-hidden />
-            <p className="text-xs leading-relaxed text-ink">
-              <span className="font-semibold">Previously rejected for this posting</span>
-              {" "}
-              — {prior.count === 1 ? "1 earlier application" : `${prior.count} earlier applications`} from this
-              applicant for this job listing
-              {prior.lastDate ? `, last applied ${formatDate(prior.lastDate)}` : ""}. Review the applicant's updated
-              credentials before deciding.
-              {prior.lastReason ? (
-                <span className="block text-stone">Last recorded reason: “{prior.lastReason}”</span>
-              ) : null}
-            </p>
-          </div>
-        )}
-
-        <Tabs variant="pill" value={tab} onValueChange={setTab}>
-          <TabsList>
-            {DOSSIER_TABS.map((t) => (
-              <TabsTrigger key={t.value} value={t.value} className="gap-1.5">
-                <t.icon className="size-3.5" aria-hidden />
-                {t.label}
-              </TabsTrigger>
-            ))}
-          </TabsList>
-
-          <TabsContent value="profile" className={sectionCls("pt-4")}>
-            <div className="rounded-lg bg-white p-4">
-              <LedgerRow label="Email" value={str(p.emailAddress) || str(payload.applicant.emailAddress)} />
-              <LedgerRow label="Mobile" value={str(p.mobileNumber) || str(p.contactNumber)} num />
-              <LedgerRow label="Other phone" value={[str(p.contactNumberSec), str(p.telephoneNumber)].filter(Boolean).join(" · ")} num />
-              <LedgerRow label="Gender" value={str(p.gender)} />
-              <LedgerRow label="Civil status" value={str(p.civilStatus)} />
-              <LedgerRow label="Birth date" value={snapshotDisplayDate(p.birthDate)} num />
-              <LedgerRow label="Birth place" value={str(p.birthPlace)} />
-              <LedgerRow label="Address" value={str(p.presentAddress)} />
-            </div>
-            <div className="mt-4">
-              <p className="text-xs font-medium text-stone">Character references</p>
-              {characterRefs.length === 0 ? (
-                <p className="mt-1 text-sm text-body-gray">None on file.</p>
-              ) : (
-                <ul className="mt-1 space-y-1">
-                  {characterRefs.map((r, i) => (
-                    <li key={i} className="text-sm text-ink">
-                      {[str(r.name), str(r.address), str(r.telephone) || str(r.contactNumber)].filter(Boolean).join(" · ") || "-"}
-                    </li>
-                  ))}
-                </ul>
+            <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-body-gray">
+              <span className="inline-flex min-w-0 items-center gap-1.5">
+                <Briefcase className="h-3.5 w-3.5 shrink-0 text-stone" aria-hidden />
+                <span className="truncate">{positionTitle}</span>
+              </span>
+              {place && (
+                <span className="inline-flex min-w-0 items-center gap-1.5">
+                  <MapPin className="h-3.5 w-3.5 shrink-0 text-stone" aria-hidden />
+                  <span className="truncate">{place}</span>
+                </span>
               )}
             </div>
-          </TabsContent>
-          <TabsContent value="education" className={sectionCls("pt-4")}>
+          </div>
+          <button
+            type="button"
+            className="focus-ring ml-auto inline-flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-full border border-divider bg-card px-4 text-sm font-medium text-ink transition-colors hover:bg-fog"
+            onClick={() => navigate("candidate", { id: String(payload.applicant.id) })}
+          >
+            Full profile
+            <ArrowUpRight className="h-4 w-4 text-stone" aria-hidden />
+          </button>
+        </div>
+
+        {/* Key facts + the primary send action (the reference's meta grid) */}
+        <div className="mt-5 flex flex-wrap items-center gap-x-10 gap-y-4">
+          {[
+            { label: "Applied on", value: formatDate(payload.dateApplied) },
+            { label: "Job applied", value: positionTitle },
+            { label: "Current stage", value: stageLabel },
+            {
+              label: "Requirements",
+              value:
+                payload.requirements.requiredCount > 0
+                  ? `${payload.requirements.metCount} of ${payload.requirements.requiredCount} met`
+                  : "—",
+            },
+          ].map((m) => (
+            <div key={m.label} className="min-w-0">
+              <p className="text-[11px] leading-4 text-body-gray">{m.label}</p>
+              <p className="mt-0.5 max-w-[220px] truncate text-sm font-semibold text-ink" title={m.value}>
+                {m.value}
+              </p>
+            </div>
+          ))}
+          <button
+            type="button"
+            className={ctaBtn + " ml-auto"}
+            disabled={!email}
+            title={email ? "Send a direct email to the applicant" : "No email on record for this applicant"}
+            onClick={() => setEmailOpen(true)}
+          >
+            <Mail className="h-4 w-4" aria-hidden />
+            Send Email
+          </button>
+        </div>
+
+        {/* Pipeline stepper + days counter */}
+        <div className="mt-5 border-t border-divider pt-5">
+          <StageStepper status={payload.status} dateApplied={payload.dateApplied} />
+        </div>
+      </div>
+
+      {/* MOM 2026-10-13 — previously-rejected indicator for this posting. */}
+      {prior && (
+        <div
+          className="flex items-start gap-2.5 rounded-xl border border-[color-mix(in_srgb,var(--warn)_35%,transparent)] bg-[color-mix(in_srgb,var(--warn)_10%,white)] px-4 py-3"
+          role="note"
+        >
+          <History className="mt-0.5 h-4 w-4 shrink-0 text-[var(--warn)]" aria-hidden />
+          <p className="text-xs leading-relaxed text-ink">
+            <span className="font-semibold">Previously rejected for this posting</span>
+            {" "}
+            — {prior.count === 1 ? "1 earlier application" : `${prior.count} earlier applications`} from this
+            applicant for this job listing
+            {prior.lastDate ? `, last applied ${formatDate(prior.lastDate)}` : ""}. Review the applicant's updated
+            credentials before deciding.
+            {prior.lastReason ? (
+              <span className="block text-stone">Last recorded reason: “{prior.lastReason}”</span>
+            ) : null}
+          </p>
+        </div>
+      )}
+
+      {/* ── Body: stacked dossier cards LEFT · decision rail RIGHT ── */}
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_340px] xl:grid-cols-[minmax(0,1fr)_400px]">
+        <div className="min-w-0 space-y-5">
+          <AboutCard payload={payload} />
+          <SectionCard title="Work Experience" count={payload.snapshots.experiences.length || undefined}>
+            <WorkExperienceCard rows={payload.snapshots.experiences} />
+          </SectionCard>
+          <SectionCard title="Education" count={payload.snapshots.educations.length || undefined}>
             <EducationCards rows={payload.snapshots.educations} />
-          </TabsContent>
-          <TabsContent value="experience" className={sectionCls("pt-4")}>
-            <ExperienceCards rows={payload.snapshots.experiences} />
-          </TabsContent>
-          <TabsContent value="training" className={sectionCls("pt-4")}>
+          </SectionCard>
+          <SectionCard title="Training" count={payload.snapshots.trainings.length || undefined}>
             <TrainingCards rows={payload.snapshots.trainings} />
-          </TabsContent>
-          <TabsContent value="eligibility" className={sectionCls("pt-4")}>
+          </SectionCard>
+          <SectionCard title="Eligibility" count={payload.snapshots.eligibilities.length || undefined}>
             <EligibilityCards rows={payload.snapshots.eligibilities} />
-          </TabsContent>
-          <TabsContent value="awards" className={sectionCls("pt-4")}>
+          </SectionCard>
+          <SectionCard title="Awards" count={payload.snapshots.awards.length || undefined}>
             <AwardCards rows={payload.snapshots.awards} />
-          </TabsContent>
-          <TabsContent value="documents" className={sectionCls("pt-4")}>
+          </SectionCard>
+          <SectionCard title="Documents" count={payload.snapshots.documents.length || undefined}>
             {payload.snapshots.documents.length === 0 ? (
               <EmptyNote>No documents uploaded.</EmptyNote>
             ) : (
@@ -1620,29 +1958,28 @@ export function ReviewWorkspace({
                 })}
               </div>
             )}
-          </TabsContent>
-        </Tabs>
+          </SectionCard>
 
-        {/* Document preview modal (shared) — opened from the Documents tab rows. */}
-        <DocumentPreviewModal
-          doc={previewDoc}
-          open={previewDoc !== null}
-          onOpenChange={(o) => {
-            if (!o) setPreviewDoc(null);
-          }}
-        />
-      </div>
+          {/* Document preview modal (shared) — opened from the Documents rows. */}
+          <DocumentPreviewModal
+            doc={previewDoc}
+            open={previewDoc !== null}
+            onOpenChange={(o) => {
+              if (!o) setPreviewDoc(null);
+            }}
+          />
+        </div>
 
-      {/* ── RIGHT: decision rail — inside the modal it never exceeds the
-          dialog interior (92dvh − dialog padding), so the rail scrolls
-          internally and the dialog itself never scrolls. */}
-      <div
-        className={`space-y-4 self-start lg:sticky lg:top-6 ${
-          bounded ? "lg:max-h-[calc(92dvh-4rem)]" : "lg:max-h-[calc(100dvh-3rem)]"
-        } lg:overflow-y-auto scroll-thin`}
-      >
-        <RequirementsMatchPanel report={payload.requirements} />
-        <CredentialsRow payload={payload} />
+        {/* ── RIGHT: decision rail — inside the modal it never exceeds the
+            dialog interior (92dvh − dialog padding), so the rail scrolls
+            internally and the dialog itself never scrolls. */}
+        <div
+          className={`space-y-4 self-start lg:sticky lg:top-6 ${
+            bounded ? "lg:max-h-[calc(92dvh-4rem)]" : "lg:max-h-[calc(100dvh-3rem)]"
+          } lg:overflow-y-auto scroll-thin`}
+        >
+          <MatchingPanel report={payload.requirements} applicationId={applicationId} />
+          <CredentialsRow payload={payload} />
 
         {/* (The standalone "Applied · Awaiting review." banner was removed —
             the dossier header already carries the live status pill, so the
@@ -1792,6 +2129,7 @@ export function ReviewWorkspace({
         </div>
 
         <DirectEmailCard applicationId={applicationId} recipient={email} emails={emails} onSent={refetch} />
+        </div>
       </div>
 
       {/* Decision confirm */}
@@ -1862,6 +2200,16 @@ export function ReviewWorkspace({
           applicationId={applicationId}
           kind={noticeKind}
           onClose={() => setNoticeKind(null)}
+          onSent={refetch}
+        />
+      )}
+
+      {/* Direct email composer — the header card's "Send Email" action */}
+      {emailOpen && email && (
+        <DirectEmailDialog
+          applicationId={applicationId}
+          to={email}
+          onClose={() => setEmailOpen(false)}
           onSent={refetch}
         />
       )}
