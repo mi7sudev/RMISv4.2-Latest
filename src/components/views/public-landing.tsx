@@ -598,8 +598,13 @@ export default function PublicLanding() {
         <section className="hero-sky rounded-3xl p-6 sm:p-8 lg:px-10 lg:py-10">
           {/* QA 2026-02: header renamed to "Job Opportunities" to match the
               Positions tab; the live "N open" pill was removed — it read as
-              an unclickable button. */}
-          <h1 className="text-display font-display">Job Opportunities</h1>
+              an unclickable button. Task 13 — phones step the heading down
+              to 30px (same 1.2 leading / 0.44px tracking as the 44px Jeton
+              token, restored from sm up) so the full title holds ONE line
+              inside the 390px hero instead of wrapping. */}
+          <h1 className="text-[30px] font-display leading-[1.2] tracking-[0.44px] sm:text-display">
+            Job Opportunities
+          </h1>
           {/* Institutional proof — agency name only; the emblem lives in the
               sticky header directly above, so repeating it here read as a
               duplicate seal (user QA). */}

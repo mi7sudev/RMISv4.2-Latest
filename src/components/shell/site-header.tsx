@@ -30,16 +30,19 @@ export function SiteHeader() {
   return (
     <header className="pointer-events-none sticky top-0 z-40 px-3 pt-3 sm:px-4 sm:pt-4">
       <nav
-        className="glass pointer-events-auto mx-auto flex h-16 w-full max-w-[1600px] items-center justify-between gap-4 rounded-[84px] border border-divider/70 px-4 sm:px-6"
+        className="glass pointer-events-auto mx-auto flex h-16 w-full max-w-[1600px] items-center justify-between gap-3 rounded-[84px] border border-divider/70 px-3 sm:gap-4 sm:px-6"
         aria-label="Primary"
       >
         {/* Brand — the complete system title IS the brand text (QA: the
             "RMIS" wordmark line above it was redundant — the title already
             carries the "(RMIS)" acronym). min-w-0 lets it wrap to two lines
-            when the capsule is narrow instead of overflowing the pill. */}
+            when the capsule is narrow instead of overflowing the pill.
+            Task 13 — the title is NO LONGER hidden on phones: an 11px step
+            (15px from sm up) keeps the full name legible beside the two-logo
+            lockup and the Sign in control inside the 64px capsule. */}
         <button
           onClick={() => navigate("home")}
-          className="flex min-h-[44px] items-center gap-3"
+          className="flex min-h-[44px] items-center gap-2.5 sm:gap-3"
           aria-label="RMIS — Recruitment Management Information System home"
         >
           {/* Official header lockup — the COMPLETE two-logo composition from
@@ -51,10 +54,9 @@ export function SiteHeader() {
           <img
             src="/MIRDC-header-logo.png"
             alt="DOST-MIRDC emblems"
-            style={{ height: 40 }}
-            className="w-auto shrink-0"
+            className="h-9 w-auto shrink-0 sm:h-10"
           />
-          <span className="hidden min-w-0 text-balance text-left text-[15px] font-medium leading-tight tracking-[0.01em] text-ink sm:block">
+          <span className="min-w-0 text-balance text-left text-[11px] font-medium leading-[1.15] tracking-[0.01em] text-ink sm:text-[15px] sm:leading-tight">
             {RMIS_FULL_NAME}
           </span>
         </button>
@@ -85,7 +87,7 @@ export function SiteHeader() {
             !onSignInView && (
               <button
                 onClick={() => navigate("signin")}
-                className="dlg-cta text-nav inline-flex min-h-[44px] items-center whitespace-nowrap px-5 font-medium"
+                className="dlg-cta text-nav inline-flex min-h-[44px] items-center whitespace-nowrap px-4 font-medium sm:px-5"
                 aria-label="Sign in to RMIS"
               >
                 Sign in

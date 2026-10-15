@@ -27,7 +27,6 @@
 
 import { useCallback, useState } from "react";
 import { useSession } from "@/components/session-provider";
-import { BrandLogo } from "@/components/brand-logo";
 import { RMIS_FULL_NAME } from "@/components/auth-enterprise";
 import { MobileTabBar } from "@/components/shell/mobile-tab-bar";
 import { NavRail } from "@/components/shell/nav-rail";
@@ -96,11 +95,19 @@ export function AppShell({
               className="flex min-h-[44px] items-center gap-2.5"
               aria-label="Go to my workspace"
             >
-              {/* Official unified brand mark — transparent art, so it floats
-                  directly on the light rail strip. The complete system title
-                  is the brand text (QA: the "RMIS" wordmark line above it
-                  was redundant — the title carries the acronym). */}
-              <BrandLogo logoSize={22} tone="light" />
+              {/* Task 13 — the OFFICIAL two-logo header lockup (DOST
+                  quatrefoil + MIRDC gear-crest seal, one transparent strip —
+                  same art the public header floats on its capsule), replacing
+                  the single unified mark so mobile carries the complete
+                  agency composition. The complete system title is the brand
+                  text (QA: the "RMIS" wordmark line above it was redundant —
+                  the title carries the acronym). */}
+              <img
+                src="/MIRDC-header-logo.png"
+                alt="DOST-MIRDC emblems"
+                style={{ height: 40 }}
+                className="w-auto shrink-0"
+              />
               <span className="min-w-0 text-balance text-left text-[13px] font-medium leading-tight text-ink">
                 {RMIS_FULL_NAME}
               </span>
