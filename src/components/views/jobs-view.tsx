@@ -68,6 +68,7 @@ import { EmptyState, ErrorCard, PageHeader, StatusPill } from "@/components/ui/s
 import { Alert, AlertContent, AlertDescription, AlertIcon, AlertTitle } from "@/components/motion/alert";
 import { Skeleton } from "@/components/ui/skeleton";
 import { JobListCard } from "@/components/views/jobs/job-openings-card";
+import { JobStatusPill } from "@/components/views/recruitment";
 import { jobIsActive } from "@/lib/job-meta";
 import { useSavedJobs } from "@/lib/use-saved-jobs";
 
@@ -120,23 +121,6 @@ function deadlineProgress(job: JobWire): number {
   if (Number.isNaN(start) || Number.isNaN(end) || end <= start) return job.deadlineDate ? 100 : 0;
   const pct = ((Date.now() - start) / (end - start)) * 100;
   return Math.min(100, Math.max(0, pct));
-}
-
-function DeadlinePill({ job, className }: { job: JobWire; className?: string }) {
-  const dl = deadlineState(job.deadlineDate);
-  return (
-    <span
-      className={`status-pill num ${
-        dl.overdue
-          ? "status-bad"
-          : dl.closingSoon
-            ? "status-warn"
-            : "status-neutral"
-      } ${className ?? ""}`}
-    >
-      {dl.label}
-    </span>
-  );
 }
 
 function RichOrPlain({ html, text }: { html?: string | null; text?: string | null }) {
@@ -250,7 +234,7 @@ function JobCard({
         </span>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <DeadlinePill job={job} />
+            <JobStatusPill job={job} />
             {applied && <StatusPill status="Applied" />}
           </div>
           <h3 className="mt-2 text-lg font-medium text-ink">{humanize(job.title)}</h3>
@@ -456,7 +440,7 @@ function DetailBody({ job }: { job: JobWire }) {
       {/* Hero */}
       <section className="dlg-card p-6 sm:p-8">
         <div className="flex flex-wrap items-center gap-2">
-          <DeadlinePill job={job} />
+          <JobStatusPill job={job} />
           {(job.applications ?? []).some((a) => isActiveApplicationStatus(a.status)) && (
             <StatusPill status="Applied" />
           )}

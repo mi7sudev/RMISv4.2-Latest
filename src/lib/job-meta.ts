@@ -6,6 +6,8 @@
 // ============================================================================
 
 import type { JobWire } from "@/lib/router";
+import type { StatusVariant } from "@/lib/status-ui";
+import { deadlineState } from "@/lib/client";
 
 /** Agency address shown when a posting has no place of assignment. */
 export const PLACE_FALLBACK = "DOST Compound, Taguig";
@@ -44,4 +46,42 @@ export function jobDeadlinePassed(deadline: string | Date | null | undefined): b
 /** Posting is open when it has no deadline, or the deadline is today or later. */
 export function jobIsActive(deadline: string | Date | null | undefined): boolean {
   return !jobDeadlinePassed(deadline);
+}
+
+// ── Job status ladder (THE one job-status badge vocabulary) ────────────────
+// One resolver behind every job-status badge — the staff Jobs table, the job
+// workspace header AND the vacant-positions board — so a posting shows the
+// same status story with the same badge treatment everywhere. Labels come
+// from deadlineState (lib/client), the vocabulary the public pages already
+// speak; variants follow the system badge tints (bad=red ✕, warn=amber ⚠,
+// ok=green ✓, neutral=gray ○):
+//   Closed (unpublished or deadline passed)      → bad
+//   Closing today / Closing in N days (≤ 7)      → warn
+//   N days left (≤ 30)                           → neutral
+//   Open (deadline further out)                  → ok
+//   Open until filled (no deadline)              → neutral
+export type JobStatusView = {
+  label: string;
+  variant: StatusVariant;
+  /** Open/Closed family — backs the staff table's status filter. */
+  family: "open" | "closed";
+};
+
+export function jobStatusView(
+  job: Pick<JobWire, "isActive" | "deadlineDate">,
+): JobStatusView {
+  const dl = deadlineState(job.deadlineDate);
+  if (job.isActive === false || dl.overdue) {
+    return { label: "Closed", variant: "bad", family: "closed" };
+  }
+  if (dl.closingSoon) {
+    return { label: dl.label, variant: "warn", family: "open" };
+  }
+  if (dl.label === "Open until filled") {
+    return { label: dl.label, variant: "neutral", family: "open" };
+  }
+  if (dl.label === "Open") {
+    return { label: dl.label, variant: "ok", family: "open" };
+  }
+  return { label: dl.label, variant: "neutral", family: "open" };
 }

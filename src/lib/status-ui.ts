@@ -191,14 +191,6 @@ export function variantForCompletion(complete: boolean | null | undefined): Stat
   return "neutral";
 }
 
-/** Job posting status → variant (OPEN is hiring = ok; CLOSED neutral). */
-export function variantForJobStatus(status: string | null | undefined): StatusVariant {
-  const key = (status || "").toUpperCase();
-  if (key === "OPEN") return "ok";
-  if (key === "CLOSED") return "neutral";
-  return variantForStatus(status);
-}
-
 /** CSS class for the status-pill primitive in globals.css. */
 export function pillClass(variant: StatusVariant): string {
   return `status-pill status-${variant}`;

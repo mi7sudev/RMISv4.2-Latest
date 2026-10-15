@@ -70,7 +70,7 @@ import { useFocusRefresh } from "@/lib/use-focus-refresh";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { BrandLogo } from "@/components/brand-logo";
 import { textToHtml } from "@/lib/sanitize";
-import { variantForJobStatus } from "@/lib/status-ui";
+import { jobStatusView } from "@/lib/job-meta";
 // BEUI Phase 5 — official virtualized Table (beui.dev/r/table, vendored
 // verbatim at src/components/motion/table). RMIS alignment happens only
 // through the block's sanctioned props (data/columns/cell renderers/heights).
@@ -124,15 +124,16 @@ function isOpenJob(j: JobWire): boolean {
   return j.isActive && !deadlineState(j.deadlineDate).overdue;
 }
 
-/** Job posting status pill — shared with the job workspace header. */
+/** Job posting status pill — THE system badge. Speaks the deadline ladder
+    (jobStatusView, lib/job-meta) so the Jobs table, the job workspace header
+    AND the vacant-positions board render one identical status story:
+    Closed (red) → Closing today / Closing in N days (amber) → N days left /
+    Open until filled (gray) → Open (green). Previously this pill showed a
+    binary Open/Closed that disagreed with the ladder the rest of the system
+    speaks. */
 export function JobStatusPill({ job }: { job: JobWire }) {
-  const open = isOpenJob(job);
-  return (
-    <StatusPill
-      status={open ? "OPEN" : "CLOSED"}
-      variant={variantForJobStatus(open ? "OPEN" : "CLOSED")}
-    />
-  );
+  const view = jobStatusView(job);
+  return <StatusPill status={view.label} variant={view.variant} />;
 }
 
 // ── Job form dialog (create + edit) — named export, reused by job-workspace ─
@@ -956,9 +957,12 @@ export default function Recruitment() {
           header: "Position",
           // Declared (not flexible): the block's trailing filler col also
           // shares the leftover space under table-layout:fixed, so an
-          // undeclared column gets only half — 142px declares the full
-          // mobile budget (142 + 108 + 108 = the ~358px card interior).
-          width: "142px",
+          // undeclared column gets only half — 120px declares the full
+          // mobile budget (120 + 140 + 98 = the ~358px card interior).
+          // Task 10-e — Status takes 140px: the badge column carries the
+          // full deadline ladder ("Closing in 3 days" needs ~130px) and
+          // the position title truncates gracefully instead.
+          width: "120px",
           cell: (j) => (
             <div className="flex min-w-0 items-center gap-2">
               <div className="min-w-0">
@@ -981,13 +985,13 @@ export default function Recruitment() {
         {
           key: "status",
           header: "Status",
-          width: "108px",
+          width: "140px",
           cell: (j) => <JobStatusPill job={j} />,
         },
         {
           key: "actions",
           header: "",
-          width: "108px",
+          width: "98px",
           align: "right",
           cell: (j) => (
             <div className="flex justify-end gap-1">
@@ -1077,7 +1081,9 @@ export default function Recruitment() {
     {
       key: "status",
       header: "Status",
-      width: "130px",
+      // 150px — the widest ladder label ("Closing in 3 days") renders its
+      // sm badge without truncation; the Position column flexes around it.
+      width: "150px",
       cell: (j) => <JobStatusPill job={j} />,
     },
     {
