@@ -853,3 +853,24 @@ Work Log:
 Stage Summary:
 - Commit 1fd3468 (Task 13); working tree clean.
 - The invitation send is now exclusively in the Pipeline kanban; the jobs table is back to View · Edit. Mobile public header shows the full system title, the signed-in mobile header carries the complete two-logo agency lockup, and the frontpage hero title holds one line on phones.
+
+---
+Task ID: 14
+Agent: Z.ai Code (main agent)
+Task: Production prep — remove the shadow DOST logo on the login panel, remove the demo access accounts from the login page, sweep dev evidence, and route outgoing-email replies to recruitment@mirdc.dost.gov.ph.
+
+Work Log:
+- auth-brand-panel.tsx: removed the ghosted-seal watermark span (BrandLogo at 500px, invert, opacity 0.08, anchored bottom-right of the left photo panel); BrandLogo import dropped. The building photo + ink-blue scrim + letterhead/motto/ledger/address remain.
+- signin-view.tsx: removed DEMO_ACCOUNTS + the whole "Demo access" fog panel (quick-fill chips, "Password: password123" hint, network note); Check import dropped; comments updated. Regression-tested sign-in end to end (testadmin → #/operations) — the form path is untouched.
+- Production sweep: grep-audited src for user-visible dev evidence — zero remaining ("Demo access", "password123", demo chips all gone); the single console.log left is the server-side audit fallback (legitimate). Admin Email panel keeps its honest provider introspection ("Mock (development)" reflects actual .env state).
+- prisma/seed.ts: production guard — refuses to run unless ALLOW_DEMO_SEED=1, and hard-refuses when NODE_ENV=production, so demo accounts can never be seeded into prod by accident. No seed alias in package.json, so nothing else breaks.
+- Email Reply-To: notify.ts gained RECRUITMENT_REPLY_TO ("MIRDC HR Office" <recruitment@mirdc.dost.gov.ph>, EMAIL_REPLY_TO override) sent on ALL provider paths — middleware body.replyTo, Resend reply_to, legacy gateway replyTo. Single sendEmail chokepoint covers every notice/OTP/reset/direct email.
+- deploy/mirdc_middleware/index.js (drop-in relay): root cause found — the deployed relay maps body.from → Reply-To and pins From to the SMTP account (systems@), ignoring an explicit replyTo. Relay now resolves Reply-To as body.replyTo → body.from → absent; From unchanged for SPF/DKIM alignment. Contract comment + DEPLOY-NOTES table updated; node --check passes.
+- END-TO-END PROOF: ran a capturing echo relay on :3055, pointed .env at it (EMAIL_PROVIDER=middleware), POSTed /api/auth/forgot-password → captured payload shows replyTo = "MIRDC HR Office" <recruitment@mirdc.dost.gov.ph> (+ legacy from slot). .env restored to mock; echo service removed.
+- DEPLOYMENT.md: §0.4 rewritten (Reply-To contract + post-deploy VM verification step: send one notice and check the Reply-To header; redeploy the updated drop-in index.js to the VM) + EMAIL_REPLY_TO documented in the env template.
+- Browser verification: login page desktop 1440×900 + mobile 390×844 — no watermark, no demo panel; screenshots .verify/14-login-desktop-clean.png, 14-login-mobile-clean.png. bun run lint clean; dev.log healthy.
+
+Stage Summary:
+- Commit 451889e (Task 14); working tree clean.
+- Login is production-grade: institutional panel without the watermark, no demo credentials anywhere in the UI; seeding can never leak demo data to prod. Every system email now carries Reply-To: recruitment@mirdc.dost.gov.ph — applicant replies reach the recruitment mailbox once the updated relay (deploy/mirdc_middleware/index.js) is deployed to the VM (verification step documented).
+- Flagged for the operator: the SANDBOX database still contains seeded demo rows (testadmin is the only ADMIN — deleting it here would lock them out); production must deploy against db/production-data.db, never this seeded dev DB.
