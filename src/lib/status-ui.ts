@@ -8,7 +8,8 @@
 export type StatusVariant = "ok" | "warn" | "bad" | "info" | "neutral";
 
 import type { AnimatedBadgeStatus } from "@/components/motion/animated-badge";
-import { getStatusMeta, type Tone, type StageKey } from "@/lib/status";
+import { Check, Inbox, ScanSearch, X, type LucideIcon } from "lucide-react";
+import { getStatusMeta, stageForStatus, type Tone, type StageKey } from "@/lib/status";
 
 /** Functional variant → official BEUI AnimatedBadge status
  *  (beui.dev/components/motion/animated-badge). The single mapping behind
@@ -65,6 +66,52 @@ export const STAGE_VIZ: Record<StageKey, string> = {
   "Shortlisted": "var(--viz-2)",
   "Rejected": "var(--bad)",
 };
+
+// ── Stage icon vocabulary (QA 2026-02) ──────────────────────────────────────
+
+/** Pipeline stage → semantic Lucide glyph — the ONE stage icon vocabulary.
+ *  Kanban StageDot (board columns + queue filter chips), the analytics
+ *  funnel, candidate mini-pipelines, job pipeline headers and candidate-detail
+ *  rows all draw from this map so a stage never changes icon between pages.
+ *  Applied and Under Review deliberately share the blue info TINT, so the
+ *  GLYPH is what tells them apart: Applied = Inbox (the application was
+ *  received), Under Review = ScanSearch (being screened — the same glyph as
+ *  the Start Review CTA). The old paper-plane (Send) read as "send message"
+ *  and rendered identically on both stages — retired. Shortlisted / Rejected
+ *  keep the system check / x that the badges and CSS pills already speak. */
+export const STAGE_GLYPH: Record<StageKey, LucideIcon> = {
+  "Applied": Inbox,
+  "Under Review": ScanSearch,
+  "Shortlisted": Check,
+  "Rejected": X,
+};
+
+/** Stored-status spellings whose AnimatedBadge glyph should match the stage
+ *  dots (applicant-facing labels included). Every other status keeps the
+ *  badge defaults, which are already correct: success ✓ · danger ✕ ·
+ *  warning ⚠ · info (i) · neutral ○. Only the two blue families need the
+ *  re-point — they share one variant, so the badge alone can't tell
+ *  "Applied" from "Under Review". Keys are normalized lowercase display
+ *  forms (underscores/case folded by glyphForStatus); exported as a RECORD
+ *  so render paths can do static member lookups (react-hooks lint rejects
+ *  JSX types that come from function calls). */
+export const PILL_STAGE_GLYPH: Readonly<Record<string, LucideIcon>> = {
+  applied: Inbox,
+  pending: Inbox,
+  submitted: Inbox,
+  "under review": ScanSearch,
+  "for evaluation": ScanSearch,
+  screening: ScanSearch,
+  evaluation: ScanSearch,
+  "final review": ScanSearch,
+  evaluated: ScanSearch,
+  "in review": ScanSearch,
+};
+
+export function glyphForStatus(status: string | null | undefined): LucideIcon | null {
+  if (!status) return null;
+  return PILL_STAGE_GLYPH[status.trim().toLowerCase().replace(/[_\s]+/g, " ")] ?? null;
+}
 
 /** Canonical variant for ANY stored application/job status spelling. */
 export function variantForStatus(status: string | null | undefined): StatusVariant {

@@ -13,7 +13,7 @@ import * as React from "react";
 import { Building2, Clock, Inbox } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { StageKey } from "@/lib/status";
-import { STAGE_VARIANT, type StatusVariant } from "@/lib/status-ui";
+import { STAGE_GLYPH, STAGE_VARIANT, type StatusVariant } from "@/lib/status-ui";
 import { StatusDot } from "@/components/ui/shell";
 
 // ── Stage dots (kanban board palette) ───────────────────────────────────────
@@ -33,7 +33,13 @@ const STAGE_VARIANT_WITH_NEUTRAL: Record<StageKey | "Neutral", StatusVariant> = 
 };
 
 export function StageDot({ stage, className }: { stage: StageKey | "Neutral"; className?: string }) {
-  return <StatusDot variant={STAGE_VARIANT_WITH_NEUTRAL[stage]} className={className} />;
+  return (
+    <StatusDot
+      variant={STAGE_VARIANT_WITH_NEUTRAL[stage]}
+      glyph={stage === "Neutral" ? undefined : STAGE_GLYPH[stage]}
+      className={className}
+    />
+  );
 }
 
 // ── Pastel initial avatar ───────────────────────────────────────────────────

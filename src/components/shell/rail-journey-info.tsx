@@ -23,9 +23,9 @@ import {
   CalendarCheck,
   ChevronRight,
   CircleAlert,
+  Inbox,
   Mail,
   ScanSearch,
-  Send,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useState } from "react";
@@ -44,10 +44,13 @@ type JourneyStep = {
   description: string;
 };
 
-/** Mirrors the system's actual pipeline + the offline MOM steps. */
+/** Mirrors the system's actual pipeline + the offline MOM steps. Step glyphs
+ *  share the stage vocabulary (STAGE_GLYPH in lib/status-ui): Apply = Inbox
+ *  (the application lands in HR's queue), Under review = ScanSearch — the
+ *  same shape the staff-side stage dots and queue filter chips speak. */
 const STEPS: JourneyStep[] = [
   {
-    icon: Send,
+    icon: Inbox,
     label: "Apply",
     description: "Submit your application on the Jobs board.",
   },

@@ -36,7 +36,7 @@ import {
 import { apiFetch, appliedAgo, formatDate, fullName, humanize } from "@/lib/client";
 import { useSession } from "@/components/session-provider";
 import { PIPELINE_STAGES, isRejectedStatus, stageForStatus, type StageKey } from "@/lib/status";
-import { variantForCompletion, STAGE_VARIANT } from "@/lib/status-ui";
+import { STAGE_GLYPH, STAGE_VARIANT, variantForCompletion } from "@/lib/status-ui";
 // BEUI Phase 5 — official virtualized Table (beui.dev/r/table, vendored
 // verbatim at src/components/motion/table). Alignment only via sanctioned props.
 import { Table, type TableColumn } from "@/components/motion/table";
@@ -183,7 +183,7 @@ function CandidateModal({ id, onClose }: { id: number | null; onClose: () => voi
                 {(["Applied", "Under Review", "Shortlisted"] as StageKey[]).map((stage, i) => (
                   <div key={stage} className="flex flex-1 items-center gap-2">
                     <div className="flex items-center gap-1.5">
-                      <StatusDot variant={countBy(stage) > 0 ? STAGE_VARIANT[stage] : "neutral"} />
+                      <StatusDot variant={countBy(stage) > 0 ? STAGE_VARIANT[stage] : "neutral"} glyph={countBy(stage) > 0 ? STAGE_GLYPH[stage] : undefined} />
                       <span className="text-xs text-stone">{["Submitted", "Review", "Shortlisted"][i]}</span>
                       <span className="num text-xs text-ink">{countBy(stage)}</span>
                     </div>

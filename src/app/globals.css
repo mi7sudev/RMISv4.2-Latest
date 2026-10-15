@@ -768,8 +768,12 @@
 /* Status pill variants (icon + tinted bg) — true Bevel capsules.
    Accessibility: state never rides on hue alone — every pill carries a
    shape-coded stroke glyph drawn as a clean 24px Lucide-geometry SVG
-   (ok=check · warn=clock · bad=x · info=send · neutral=minus) masked to
-   currentColor. No enclosing disc — just the professional stroke icon. */
+   (ok=check · warn=clock · bad=x · info=(i) · neutral=minus) masked to
+   currentColor. No enclosing disc — just the professional stroke icon.
+   QA 2026-02: the old info=send paper-plane read as "send message" on
+   Applied / Under Review chips — the info family now speaks (i), matching
+   the AnimatedBadge and StatusDot glyphs; pipeline STAGES re-point their
+   glyphs via STAGE_GLYPH (lib/status-ui) instead. */
 .status-pill {
   display: inline-flex;
   align-items: center;
@@ -807,7 +811,7 @@
   color: var(--bad);
 }
 .status-pill.status-info {
-  --pill-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='m22 2-7 20-4-9-9-4Z' fill='none' stroke='black' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M22 2 11 13' fill='none' stroke='black' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  --pill-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='9.2' fill='none' stroke='black' stroke-width='2.4'/%3E%3Cpath d='M12 11.1v4.7' fill='none' stroke='black' stroke-width='2.4' stroke-linecap='round'/%3E%3Cpath d='M12 7.9h.01' fill='none' stroke='black' stroke-width='2.4' stroke-linecap='round'/%3E%3C/svg%3E");
   background: var(--info-bg);
   color: var(--info);
 }
@@ -818,7 +822,7 @@
 }
 
 /* Icon status chips — tinted disc + clean Lucide-geometry stroke glyph.
-   Same icon language as the status pills (check/clock/x/send/minus) so
+   Same icon language as the status pills (check/clock/x/info/minus) so
    every status marker across the system agrees on shape AND hue. Tinted
    bg + colored icon (no solid discs) — QA 2026-02: proper professional
    icon treatment, no bare dots, no muddy disc-in-disc glyphs. */

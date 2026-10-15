@@ -11,7 +11,7 @@
 // ============================================================================
 
 import * as React from "react";
-import { AlertCircle, ArrowLeft, Check, Clock, History, Minus, RefreshCw, Send, X } from "lucide-react";
+import { AlertCircle, ArrowLeft, Check, Clock, History, Info, Minus, RefreshCw, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ghostBtn } from "@/components/ui/buttons";
@@ -27,6 +27,7 @@ import { getStatusMeta } from "@/lib/status";
 import { AnimatedBadge } from "@/components/motion/animated-badge";
 import {
   BADGE_STATUS,
+  PILL_STAGE_GLYPH,
   variantForStatus,
   variantForVerdict,
   type StatusVariant,
@@ -145,12 +146,20 @@ export function StatusPill({
   const meta = status ? getStatusMeta(status) : null;
   const v: StatusVariant = variant ?? (meta ? variantForStatus(status) : "neutral");
   const label = meta ? meta.label : (status ?? "");
+  // Stage glyph override — the Applied / Under Review families share the info
+  // variant, so their badges carry the stage glyph (Inbox / ScanSearch) that
+  // the dots and kanban boards speak. Static member lookup (react-hooks lint
+  // rejects JSX types from calls); skipped while pulsing so the syncing
+  // spinner is never displaced.
+  const stageKey = pulse || !status ? "" : status.trim().toLowerCase().replace(/[_\s]+/g, " ");
+  const StageGlyph = stageKey ? PILL_STAGE_GLYPH[stageKey] : undefined;
   return (
     <AnimatedBadge
       status={pulse ? "loading" : BADGE_STATUS[v]}
       size="sm"
       className={cn("shrink-0", className)}
       contentKey={label}
+      icon={StageGlyph ? <StageGlyph className="h-3 w-3" /> : undefined}
     >
       {label}
     </AnimatedBadge>
@@ -356,27 +365,34 @@ export function FilterChip({
 
 /** Semantic Lucide glyph inside each tinted chip — the shape carries the state
  *  so the hue is reinforcement, never the sole signal. Same icon language as
- *  the CSS-masked status pills: ok=check · warn=clock · bad=x · info=send ·
- *  neutral=minus. Clean stroke icons (no disc-in-disc knockouts). */
+ *  the CSS-masked status pills: ok=check · warn=clock · bad=x · info=(i) ·
+ *  neutral=minus. Clean stroke icons (no disc-in-disc knockouts). Pipeline
+ *  STAGES pass an explicit glyph (STAGE_GLYPH in lib/status-ui) because
+ *  Applied and Under Review share the info tint — QA 2026-02 retired the old
+ *  paper-plane info glyph that made both stages read as "send message". */
 const STATUS_DOT_GLYPH: Record<StatusVariant, LucideIcon> = {
   ok: Check,
   warn: Clock,
   bad: X,
-  info: Send,
+  info: Info,
   neutral: Minus,
 };
 
 /** Icon status chip — a soft tinted disc with the state's stroke glyph in the
  *  matching strong hue. Replaces the bare color-only stage dots in pipelines,
- *  funnels and timelines. */
+ *  funnels and timelines. `glyph` lets stage-aware callers override the
+ *  variant default (see STAGE_GLYPH). */
 export function StatusDot({
   variant,
+  glyph,
   className,
 }: {
   variant: StatusVariant;
+  /** Optional stage/semantic glyph override (defaults to the variant glyph). */
+  glyph?: LucideIcon;
   className?: string;
 }) {
-  const Glyph = STATUS_DOT_GLYPH[variant];
+  const Glyph = glyph ?? STATUS_DOT_GLYPH[variant];
   return (
     <span aria-hidden="true" className={cn("status-dot", `dot-${variant}`, className)}>
       <Glyph strokeWidth={2.75} />

@@ -22,7 +22,7 @@ import {
   SkeletonKpis, SkeletonRows, StatusDot, StatusPill,
 } from "@/components/ui/shell";
 import { apiFetch, formatDate, formatDateTime, fullName } from "@/lib/client";
-import { documentStatusMeta, variantForCompletion, variantForStatus } from "@/lib/status-ui";
+import { documentStatusMeta, glyphForStatus, variantForCompletion, variantForStatus } from "@/lib/status-ui";
 import { navigate, useHashRoute } from "@/lib/router";
 import { useFocusRefresh } from "@/lib/use-focus-refresh";
 import { ghostBtn, ctaBtn } from "@/components/ui/buttons";
@@ -433,7 +433,7 @@ export default function CandidateDetail() {
                 onClick={() => navigate("evaluator-review", { id: String(app.id) })}
                 aria-label={`Open review workspace for ${app.positionTitle || app.jobTitle}`}
               >
-                <StatusDot variant={variantForStatus(app.status)} className="relative shrink-0" />
+                <StatusDot variant={variantForStatus(app.status)} glyph={glyphForStatus(app.status) ?? undefined} className="relative shrink-0" />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium text-ink">{app.positionTitle || app.jobTitle}</p>
                   <p className="num mt-0.5 text-xs text-stone">Applied {formatDate(app.dateApplied)}</p>

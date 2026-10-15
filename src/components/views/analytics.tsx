@@ -27,7 +27,7 @@ import {
 import { apiFetch, formatDate, fullName } from "@/lib/client";
 import { PIPELINE_STAGES, stageForStatus, getStatusMeta, type StageKey } from "@/lib/status";
 import { navigate } from "@/lib/router";
-import { STAGE_VARIANT, STAGE_VIZ, variantForStatus } from "@/lib/status-ui";
+import { STAGE_GLYPH, STAGE_VARIANT, STAGE_VIZ, glyphForStatus, variantForStatus } from "@/lib/status-ui";
 import { useFocusRefresh } from "@/lib/use-focus-refresh";
 import { cn } from "@/lib/utils";
 import { ghostBtn } from "@/components/ui/buttons";
@@ -289,7 +289,7 @@ export default function Analytics() {
                     aria-pressed={active}
                   >
                     <div className="flex items-center gap-2.5">
-                      <StatusDot variant={STAGE_VARIANT[f.stage]} />
+                      <StatusDot variant={STAGE_VARIANT[f.stage]} glyph={STAGE_GLYPH[f.stage]} />
                       <span className="flex-1 text-sm text-ink">{f.stage}</span>
                       <span className="num text-sm font-medium text-ink">{f.count}</span>
                     </div>
@@ -393,7 +393,7 @@ export default function Analytics() {
                   <ul className="space-y-2.5">
                     {donutData.map((d) => (
                       <li key={d.status} className="flex items-center gap-2.5 text-sm">
-                        <StatusDot variant={variantForStatus(d.status)} className="shrink-0" />
+                        <StatusDot variant={variantForStatus(d.status)} glyph={glyphForStatus(d.status) ?? undefined} className="shrink-0" />
                         <span className="min-w-0 flex-1 truncate text-body-gray">{d.status}</span>
                         <span className="num font-medium text-ink">{d.count}</span>
                         <span className="num w-12 text-right text-xs text-body-gray">

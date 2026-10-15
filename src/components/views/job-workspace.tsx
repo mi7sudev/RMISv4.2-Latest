@@ -26,7 +26,7 @@ import {
 import { apiFetch, appliedAgo, deadlineState, formatCurrency, formatDate, fullName, humanize } from "@/lib/client";
 import { PIPELINE_STAGES, stageForStatus, type StageKey } from "@/lib/status";
 import { navigate, useHashRoute, type JobWire, type ApplicantMini } from "@/lib/router";
-import { STAGE_VARIANT } from "@/lib/status-ui";
+import { STAGE_GLYPH, STAGE_VARIANT } from "@/lib/status-ui";
 import { useFocusRefresh } from "@/lib/use-focus-refresh";
 import { cn } from "@/lib/utils";
 import { JobFormDialog, JobStatusPill } from "@/components/views/recruitment";
@@ -254,7 +254,7 @@ export default function JobWorkspace() {
                   {PIPELINE_STAGES.map((stage) => (
                     <div key={stage} className="flex items-center justify-between gap-3 py-1.5">
                       <span className="flex items-center gap-2.5 text-xs text-body-gray">
-                        <StatusDot variant={STAGE_VARIANT[stage]} />
+                        <StatusDot variant={STAGE_VARIANT[stage]} glyph={STAGE_GLYPH[stage]} />
                         {stage}
                       </span>
                       <span className="num text-sm font-medium text-ink">{pipeline[stage].length}</span>
