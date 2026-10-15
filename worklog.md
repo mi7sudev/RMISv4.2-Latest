@@ -836,3 +836,20 @@ Work Log:
 Stage Summary:
 - Commit 7daf127 (Task 12); working tree clean.
 - The invitation/notice composer now scales with the screen: 448px before → 576/672/768/896px across sm/lg/xl/2xl, mobile untouched. Every entry point shares the widened dialog, and nothing else about the notice flow changed.
+
+---
+Task ID: 13
+Agent: Z.ai Code (main agent)
+Task: (a) remove the camera/Video invite button from the Recruitment jobs table (redundant since the send moved into the pipeline kanban); (b) show the full RMIS title on the mobile frontpage header; (c) show BOTH logos in the signed-in mobile header; (d) make "Job Opportunities" one line on mobile.
+
+Work Log:
+- recruitment.tsx: removed the per-row Video action and ALL its Task-11 wiring — the parallel /api/evaluator/queue fetch (load() back to a single jobs call), QueueLite, the shortlistedByJob memo, bulkInvite state, the NoticeFormDialog mount and the Video/stageForStatus/NoticeFormDialog imports; actions column 150px → 110px (View · Edit only). Header comment records that the invitation send lives ONLY in the Pipeline kanban's Shortlisted column. Verified: 0 invite buttons in the table, 4 View + 4 Edit, kanban invite still present ("to all 2 shortlisted applicants of this job").
+- site-header.tsx (public capsule): brand span dropped its `hidden sm:block` — now always visible, 11px/leading-[1.15] on phones vs 15px from sm; nav pill px-3/gap-3 and Sign in px-4 below sm (sm+ unchanged); two-logo lockup h-9 below sm / h-10 sm+. Measured at 390px: text wraps to exactly 2 lines (25px) beside the 71×36 lockup, no overflow.
+- app-shell.tsx (signed-in mobile top bar): the single BrandLogo mark replaced by the official /MIRDC-header-logo.png two-logo strip (79×40) — same art as the public header; BrandLogo import removed. Title wraps 2 lines (33px) inside the 64px bar, no overflow.
+- public-landing.tsx: hero h1 "Job Opportunities" now `text-[30px] leading-[1.2] tracking-[0.44px] sm:text-display` — one line at 390px (36px tall) and at 320px; 44px Jeton token restored from sm up.
+- Browser verification at 390×844 and 1440×900 (JS-driven clicks; headless input channel still dead — same environment quirk as Task 12): screenshots .verify/13-mobile-frontpage-header.png (two logos + title + one-line hero), 13-mobile-staff-header.png (two logos + title + bell), 13-desktop-table-no-invite.png (View · Edit only), 13-desktop-kanban-invite.png; desktop public header re-checked after cookie clear (15px, 1 line, 44px h1).
+- bun run lint clean; dev.log shows only healthy API traffic.
+
+Stage Summary:
+- Commit 1fd3468 (Task 13); working tree clean.
+- The invitation send is now exclusively in the Pipeline kanban; the jobs table is back to View · Edit. Mobile public header shows the full system title, the signed-in mobile header carries the complete two-logo agency lockup, and the frontpage hero title holds one line on phones.
