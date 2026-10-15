@@ -897,3 +897,18 @@ Stage Summary:
 - Frontpage hero is tighter and carries no agency-name duplication; the profile page now has a one-step tour pointing to the upload-PDS card on both viewports, and the shared tour component was fixed to portal its spotlight/coach to document.body (kills the will-change:transform containing-block bug on every mobile page).
 - The full loop was proven end to end with real UI flows: evaluator creates a posting → applicant applies → application lands Qualified in the evaluator queue.
 - The system is back to a production-clean baseline: exactly 3 accounts (testadmin/testevaluator/testapplicant, password123), zero content rows, zero logs, zero uploaded files. scripts/cleanup-system.ts (ALLOW_SANDBOX_RESET=1) is the repeatable reset tool for future test cycles.
+
+---
+Task ID: 16
+Agent: Z.ai Code (main agent)
+Task: Remove the "Go to the full positions board" link from the frontpage empty state — the all-vacant-positions (#/vacant-positions) page is slated for removal.
+
+Work Log:
+- public-landing.tsx (empty state, no open positions): deleted the "Go to the full positions board" button block (navigate("vacant-positions") + ArrowRight chevron); EmptyState description reworded "Check back soon or explore the full board for upcoming announcements." → "Check back soon for upcoming announcements." (the "explore the full board" clause pointed at the retiring page). A comment records the decision. Card padding stays symmetric — EmptyState's own py-10 px-6 covers the space the removed pb-8 button row used to fill; ArrowRight import kept (still used by the register row).
+- Browser verification (fresh cookies, JS evals): desktop 1440×900 and mobile 390×844 — board link absent, new description present, no horizontal overflow, empty card 198px tall on mobile, sticky footer correct on both. Screenshots .verify/16-empty-state-desktop.png, 16-empty-state-mobile.png. Zero console/page errors; dev.log healthy (401s are normal fresh-visitor session probes).
+- bun run lint clean.
+
+Stage Summary:
+- Commit 875cc2a (Task 16); working tree clean.
+- The frontpage empty state is now a dead-end notice ("No open positions right now · Check back soon for upcoming announcements.") with no route to the board.
+- FLAGGED for the next task (user: "we will be removing that all vacant position page"): the #/vacant-positions board page still exists and is still linked from — the posting pane's "View all jobs" header link (public-landing.tsx ~349), the applicant-home navigation (×3), the mobile tab bar's Jobs tab, jobs-view's own back/CTA links, and the applicant apply flow ("Read full description" → #/vacant-positions?job=N). Removing the page will require rewiring all of these (notably the apply deep-link), which is out of scope for this task.
