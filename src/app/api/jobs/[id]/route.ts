@@ -114,9 +114,13 @@ export const PATCH = handleApi(async (req: Request, ctx: { params: Promise<{ id:
   if (input.license !== undefined) vitals.license = input.license;
   if (input.division !== undefined) vitals.division = input.division;
   // QA 2026-02 — posting identity vitals (Item No., Salary Grade, Monthly
-  // Salary) ride the same provided-only write-through.
+  // Salary) ride the same provided-only write-through. Task 10 — Salary Step
+  // and Place of Assignment join them so the form carries the posting's
+  // complete front-page identity.
   if (input.itemNumber !== undefined) vitals.itemNumber = input.itemNumber;
   if (input.salaryGrade !== undefined) vitals.salaryGrade = input.salaryGrade;
+  if (input.salaryStep !== undefined) vitals.salaryStep = input.salaryStep;
+  if (input.placeOfAssignment !== undefined) vitals.placeOfAssignment = input.placeOfAssignment;
   if (input.salaryAmount !== undefined) vitals.salaryAmount = input.salaryAmount;
   const hasVitals = Object.keys(vitals).length > 0;
 
@@ -139,6 +143,8 @@ export const PATCH = handleApi(async (req: Request, ctx: { params: Promise<{ id:
           division: input.division ?? null,
           itemNumber: input.itemNumber ?? null,
           salaryGrade: input.salaryGrade ?? null,
+          salaryStep: input.salaryStep ?? null,
+          placeOfAssignment: input.placeOfAssignment ?? null,
           salaryAmount: input.salaryAmount ?? null,
         },
       });

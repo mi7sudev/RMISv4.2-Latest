@@ -200,6 +200,11 @@ export const jobCreateSchema = z.object({
   numberOfVacancy: z.number().int().min(1).max(99).nullable().optional(),
   itemNumber: optStr(60),
   salaryGrade: optStr(20),
+  // Task 10 — the posting's remaining front-page identity facts: Salary Step
+  // (SG grade/step pair on the public board) and Place of Assignment (the
+  // posting's location line). Both ride the same Position write-through.
+  salaryStep: optStr(20),
+  placeOfAssignment: optStr(200),
   salaryAmount: z.number().min(0).max(1_000_000).optional().nullable(),
   briefDescription: optStr(5000),
   briefDescriptionHtml: optStr(20000),

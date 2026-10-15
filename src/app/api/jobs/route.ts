@@ -67,6 +67,10 @@ function positionVitals(input: {
   division?: string | null;
   itemNumber?: string | null;
   salaryGrade?: string | null;
+  // Task 10 — the remaining front-page identity facts ride the same
+  // write-through so the public board renders them straight from the form.
+  salaryStep?: string | null;
+  placeOfAssignment?: string | null;
   salaryAmount?: number | null;
 }) {
   return {
@@ -81,6 +85,8 @@ function positionVitals(input: {
     // quick facts and every table render them.
     itemNumber: input.itemNumber ?? null,
     salaryGrade: input.salaryGrade ?? null,
+    salaryStep: input.salaryStep ?? null,
+    placeOfAssignment: input.placeOfAssignment ?? null,
     salaryAmount: input.salaryAmount ?? null,
   };
 }
@@ -94,9 +100,11 @@ function hasVitals(input: {
   division?: string | null;
   itemNumber?: string | null;
   salaryGrade?: string | null;
+  salaryStep?: string | null;
+  placeOfAssignment?: string | null;
   salaryAmount?: number | null;
 }): boolean {
-  return [input.education, input.experience, input.training, input.eligibility, input.license, input.division, input.itemNumber, input.salaryGrade]
+  return [input.education, input.experience, input.training, input.eligibility, input.license, input.division, input.itemNumber, input.salaryGrade, input.salaryStep, input.placeOfAssignment]
     .some((v) => typeof v === "string" && v.trim() !== "") || input.salaryAmount != null;
 }
 
