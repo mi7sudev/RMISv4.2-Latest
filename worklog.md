@@ -626,3 +626,19 @@ Work Log:
 
 Stage Summary:
 - One stage → one glyph, system-wide: Applied=Inbox · Under Review=ScanSearch · Shortlisted=Check · Rejected=X, on every dot, pill, filter chip, funnel and pipeline across evaluator, admin and applicant surfaces; the info variant speaks (i) and the paper plane is reserved for genuine send actions.
+
+---
+Task ID: 11
+Agent: Z.ai Code (main agent)
+Task: User QA (screenshot quote) — on the applicant profile page, the section navigator ("Personal Approx 8 Min / Education Approx 3 Min / Work Approx 5 Min / Training Approx 2 Min / Eligibility Approx 3 Min / 06 Awards Approx 2 Min / Documents") should render VERTICAL and sit on the LEFT of the forms — stepper LEFT, forms RIGHT — desktop view only.
+
+Work Log:
+- Restructured profile-view.tsx into a desktop two-column workspace: the old sticky horizontal step band (page-top) is replaced by `lg:grid lg:grid-cols-[260px_minmax(0,1fr)] lg:items-start lg:gap-10` — sticky vertical stepper rail LEFT, bounded form column RIGHT (now a grid item with min-w-0). Width 260px harmonizes with the shell NavRail (w-64).
+- Rail anatomy: white dlg-card-plain card; one full-width button per row (capsule done/current/ahead chip + short label + "Approx N Min" caption) so chip, label and caption share a single click/focus/hover target (same hover vocabulary as the old band: group-hover chip border tint + ink label); an absolute 1px bg-divider hairline (top-9→bottom-0) joins each chip to the next; the active row wears a mist bg-fog highlight + aria-current="step"; sticky top-0 z-20 keeps the rail in view while section 01 (natural, very tall height) scrolls; grid items-start lets the rail hug its content so sticky has the full row to travel.
+- Mobile (< lg) untouched by design: the iOS segmented strip moved ABOVE the grid in DOM but stays a DIRECT child of the view root — its sticky range across the whole form scroll is preserved; below lg the grid collapses to a plain block.
+- Loading skeleton mirrors the new geometry (rail rows LEFT at lg+, strip cells + form rows RIGHT); Back/Continue progression footer + completion note + PDS card stay page-level below the grid; Fragment import dropped; header + inline comments rewritten.
+- Browser-verified as maria.santos (applicant): 1440×900 — rail left/forms right, active highlight on Personal, sticky pin confirmed after 900px scroll through Identity/Address/Legal/References, rail-driven switches to Work/Training/Documents with aria-current moving and correct section render (incl. "Return to Portal" on 07); 1024×768 lg-edge two columns hold; 390×844 mobile strip pixel-identical (sliding thumb, caption, prev/next) with switch + scroll recovery intact; 768 tablet rail display:none / strip block; two-column skeleton caught mid-load matching loaded geometry. Note: the agent-browser session's input pipeline dispatched zero trusted events (raw mouse + locator clicks dead), so clicks were exercised via eval .click() — same React handler path; hover is CSS-only and untested.
+- bun run lint clean; dev.log clean; committed ecbe789 (also removed accidentally-committed tool-results temp files).
+
+Stage Summary:
+- The profile builder now reads as a proper two-column desktop workspace: a sticky vertical step rail (numbered chips, labels, time estimates, done checks, connectors) on the LEFT and the active section's form on the RIGHT, while phones keep the exact iOS strip they had — same content, same states, same guards, new geometry.
