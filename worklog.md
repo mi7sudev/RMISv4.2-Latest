@@ -748,3 +748,20 @@ Work Log:
 Stage Summary:
 - Commit (Task 10-c); working tree clean.
 - The create/edit job dialog now scales with the screen: laptops keep the 1024px the user called good, wide desktop monitors (≥1536px) get a proportional 80vw frame capped at 1440px — on a 1920px screen the dialog grew from 53% to 75% of the viewport.
+
+---
+Task ID: 10-d
+Agent: Z.ai Code (main agent)
+Task: Create-job form — field colors melt into the cloud panel bg (should be white); is the Salary Step field necessary given the Salary Grade dropdown?
+
+Work Log:
+- Field visibility: the BEUI Input/Textarea field boxes are bg-transparent — white on the sign-in page, but cloud-tinted inside this dialog's bg-cloud/60 FormPanels. Added classNames={{ field: "bg-white" }} to ALL form controls: title, item no., experience, training, license, monthly salary, vacancies, the four textareas (brief/duties/quals/compensation), and the three date inputs (the six Comboboxes already carried triggerClassName bg-white). Computed-style verified: fields rgb(255,255,255) on oklab cloud panels.
+- Salary Step retirement: removed the state, edit prefill, payload field, and the Input; Salary Grade | Monthly salary now pair in the 2-col grid. Backend untouched — schema keeps salaryStep optional and the write-through stays provided-only, so boards render "SG 19" for new postings and legacy "SG 19/2" values keep rendering. Answered the user: no, not necessary — grade dropdown + monthly salary carry the pay story.
+- Caught a runtime crash en route: a leftover setSalaryStep("") in the create-mode reset branch of prefill threw "setSalaryStep is not defined" (error boundary screenshot) — removed; dialog opens clean.
+- End-to-end verified (agent-browser, evaluator): POST /api/jobs WITHOUT salaryStep → 201, Position stores grade 19 + step none; public #/vacant-positions card renders "QA Place, Taguig City · Permanent · SG 19 · Closes Nov 30, 2026 | ₱51,367/mo"; QA posting deleted afterwards (DELETE 200). Edit dialog prefills title/grade 13/salary 31699 with no step field. Mobile 390×844: 358px dialog, white fields, no step.
+- Screenshots: .verify/10d-create-white-fields-top.png, 10d-create-white-fields-bottom.png, 10d-create-white-mobile.png.
+- bun run lint clean (after the prefill fix); dev.log clean post-fix.
+
+Stage Summary:
+- Commit (Task 10-d); working tree clean.
+- The create/edit form's controls are now crisply white against the cloud panels, and the Salary Step question is resolved: field removed from the form, data model untouched, boards degrade gracefully to the SG grade alone.
